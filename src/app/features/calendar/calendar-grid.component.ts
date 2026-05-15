@@ -631,11 +631,11 @@ const UNASSIGNED_ROW_ID = '__unassigned__';
       pointer-events: none;
       z-index: 7;
       transition: left 0.05s, width 0.05s;
-      &--collides {
-        background: color-mix(in srgb, var(--danger) 40%, transparent);
-        border-color: var(--danger);
-        animation: flash 0.4s ease;
-      }
+    }
+    .drag-preview--collides {
+      background: color-mix(in srgb, var(--danger) 40%, transparent);
+      border-color: var(--danger);
+      animation: flash 0.4s ease;
     }
     @keyframes flash {
       0%, 100% { opacity: 1; }

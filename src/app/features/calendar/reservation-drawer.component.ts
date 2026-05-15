@@ -460,11 +460,11 @@ interface FolioGroup {
     .loyalty-badge {
       font-size: 10px; font-weight: 700; padding: 2px var(--space-2);
       border-radius: var(--radius-sm); text-transform: uppercase; letter-spacing: 0.06em;
-      &--gold    { background: var(--gold-100); color: var(--gold-700); }
-      &--silver  { background: var(--ink-100);  color: var(--ink-600); }
-      &--platinum{ background: var(--navy-800); color: var(--gold-300); }
-      &--bronze  { background: #f0e8dd; color: #8b6a4a; }
     }
+    .loyalty-badge--gold    { background: var(--gold-100); color: var(--gold-700); }
+    .loyalty-badge--silver  { background: var(--ink-100);  color: var(--ink-600); }
+    .loyalty-badge--platinum{ background: var(--navy-800); color: var(--gold-300); }
+    .loyalty-badge--bronze  { background: #f0e8dd; color: #8b6a4a; }
 
     /* Info grid */
     .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
@@ -492,11 +492,11 @@ interface FolioGroup {
     /* Notes */
     .notes-text {
       font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; margin: 0;
-      &--internal {
-        background: var(--warning-bg); border-left: 3px solid var(--warning);
-        padding: var(--space-3); border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-        color: var(--text);
-      }
+    }
+    .notes-text--internal {
+      background: var(--warning-bg); border-left: 3px solid var(--warning);
+      padding: var(--space-3); border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      color: var(--text);
     }
 
     /* ── Folio tab specific ── */
@@ -568,8 +568,8 @@ interface FolioGroup {
       background-size: 200% 100%;
       animation: shimmer 1.4s infinite;
       margin-bottom: var(--space-2);
-      &--sm { height: 24px; width: 60%; }
     }
+    .skeleton-row--sm { height: 24px; width: 60%; }
     .folio-skeleton { padding-top: var(--space-4); }
     @keyframes shimmer { to { background-position: -200% 0; } }
 
@@ -585,14 +585,14 @@ interface FolioGroup {
       flex: 1; height: 40px; border: none; border-radius: var(--radius-md);
       font-size: var(--text-sm); font-weight: 600; cursor: pointer;
       transition: all var(--t-fast);
-      &--primary {
-        background: var(--primary); color: var(--on-primary);
-        &:hover { background: var(--primary-hover); }
-      }
-      &--danger {
-        background: var(--danger-bg); color: var(--danger);
-        &:hover { background: var(--danger); color: #fff; }
-      }
+    }
+    .btn-action--primary {
+      background: var(--primary); color: var(--on-primary);
+      &:hover { background: var(--primary-hover); }
+    }
+    .btn-action--danger {
+      background: var(--danger-bg); color: var(--danger);
+      &:hover { background: var(--danger); color: #fff; }
     }
   `],
 })

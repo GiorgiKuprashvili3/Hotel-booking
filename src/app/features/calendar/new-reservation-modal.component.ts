@@ -453,8 +453,8 @@ function isValidEmail(v: string): boolean {
     .form-section {
       padding: var(--space-4) 0;
       border-bottom: 1px solid var(--border);
-      &--last { border-bottom: none; }
     }
+    .form-section--last { border-bottom: none; }
     .form-section__title {
       display: flex; align-items: center; gap: var(--space-2);
       font-size: var(--text-xs); font-weight: 700;
@@ -533,11 +533,11 @@ function isValidEmail(v: string): boolean {
       font-size: 10px; font-weight: 700; padding: 2px 6px;
       border-radius: var(--radius-sm); text-transform: uppercase;
       letter-spacing: 0.05em;
-      &--gold     { background: #fef3c7; color: #92400e; }
-      &--silver   { background: #f1f5f9; color: #475569; }
-      &--platinum { background: #1e293b; color: #fbbf24; }
-      &--bronze   { background: #fdf0e8; color: #7c4a1e; }
     }
+    .result-tier--gold     { background: #fef3c7; color: #92400e; }
+    .result-tier--silver   { background: #f1f5f9; color: #475569; }
+    .result-tier--platinum { background: #1e293b; color: #fbbf24; }
+    .result-tier--bronze   { background: #fdf0e8; color: #7c4a1e; }
     .search-empty-wrap {
       display: flex; flex-direction: column; gap: var(--space-2);
       padding: var(--space-3) 0 0;
@@ -737,10 +737,10 @@ function isValidEmail(v: string): boolean {
     .rate-tag {
       font-size: 10px; font-weight: 600; padding: 2px 7px;
       border-radius: var(--radius-full); text-transform: uppercase; letter-spacing: 0.04em;
-      &--green { background: var(--success-bg); color: var(--success); }
-      &--red   { background: var(--danger-bg);  color: var(--danger); }
-      &--blue  { background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); }
     }
+    .rate-tag--green { background: var(--success-bg); color: var(--success); }
+    .rate-tag--red   { background: var(--danger-bg);  color: var(--danger); }
+    .rate-tag--blue  { background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); }
 
     /* Textarea */
     .textarea {

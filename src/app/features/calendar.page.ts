@@ -398,8 +398,8 @@ export interface CalendarFilters {
     }
     .legend-dot {
       width: 10px; height: 10px; border-radius: 2px;
-      &--weekend { background: rgba(var(--ink-300-rgb, 184,184,184), 0.3); border: 1px solid var(--border); }
     }
+    .legend-dot--weekend { background: rgba(var(--ink-300-rgb, 184,184,184), 0.3); border: 1px solid var(--border); }
 
     /* ── Body ── */
     .cal-body {
