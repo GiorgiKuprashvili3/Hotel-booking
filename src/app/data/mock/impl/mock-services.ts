@@ -3,6 +3,7 @@ import { Observable, delay, of, throwError } from 'rxjs';
 import {
   IPropertyService, IRoomService, IReservationService, IGuestService,
   IStaffService, IHousekeepingService, IMaintenanceService, IConciergeService,
+  IAnalyticsService, AnalyticsSnapshot,
   ReservationQuery, GuestQuery,
 } from '../../services/service-tokens';
 import {
@@ -10,7 +11,7 @@ import {
   HousekeepingTask, MaintenanceRequest, ConciergeRequest,
   RoomStatus, ReservationStatus, HousekeepingStatus, Folio,
 } from '../../../domain';
-import { getSeedDataset } from '../seed/seed-generator';
+import { getSeedDataset, AnalyticsSnapshotRaw } from '../seed/seed-generator';
 
 /* ============================================================
    All mock services. Each simulates network latency with delay().
@@ -254,5 +255,23 @@ export class MockConciergeService implements IConciergeService {
     c.status = status as any;
     if (status === 'completed') c.completedAt = new Date();
     return latency(c);
+  }
+}
+
+/* ---------- Analytics ---------- */
+@Injectable({ providedIn: 'root' })
+export class MockAnalyticsService implements IAnalyticsService {
+  listSnapshots(propertyId: string): Observable<AnalyticsSnapshot[]> {
+    return latency(
+      getSeedDataset().analyticsSnapshots
+        .filter(s => s.propertyId === propertyId)
+        .sort((a, b) => a.date.localeCompare(b.date)),
+    );
+  }
+  getSnapshot(propertyId: string, date: string): Observable<AnalyticsSnapshot | undefined> {
+    return latency(
+      getSeedDataset().analyticsSnapshots
+        .find(s => s.propertyId === propertyId && s.date === date),
+    );
   }
 }
