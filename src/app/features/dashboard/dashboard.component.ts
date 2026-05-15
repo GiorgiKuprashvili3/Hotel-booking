@@ -6,9 +6,15 @@ import { KpiTileComponent } from '../../shared/components/kpi-tile.component';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 import { StatusChipComponent } from '../../shared/components/status-chip.component';
 import { PropertyContextService } from '../../core/config/property-context.service';
-import { RESERVATION_SERVICE, ROOM_SERVICE } from '../../data/services/service-tokens';
 import {
-  Reservation, Room, ReservationStatus, RoomStatus,
+  ANALYTICS_SERVICE, AnalyticsSnapshot,
+  GUEST_SERVICE, HOUSEKEEPING_SERVICE, MAINTENANCE_SERVICE,
+  RESERVATION_SERVICE, ROOM_SERVICE,
+} from '../../data/services/service-tokens';
+import {
+  Guest, HousekeepingTask, MaintenanceRequest, Reservation, Room,
+  HousekeepingStatus, MaintenancePriority, MaintenanceStatus,
+  ReservationStatus, RoomStatus,
 } from '../../domain';
 
 @Component({
@@ -38,7 +44,7 @@ import {
         icon="meeting_room"
         [value]="occupancyPct()"
         suffix="%"
-        [delta]="3.2"
+        [delta]="occupancyDelta()"
         deltaLabel="vs last week"
         [loading]="loading()" />
       <lux-kpi-tile
@@ -46,7 +52,7 @@ import {
         icon="payments"
         prefix="₾"
         [value]="(revenueToday() | number:'1.0-0') ?? '0'"
-        [delta]="-1.8"
+        [delta]="revenueDelta()"
         deltaLabel="vs yesterday"
         [loading]="loading()" />
       <lux-kpi-tile
@@ -54,7 +60,7 @@ import {
         icon="trending_up"
         prefix="₾"
         [value]="(adr() | number:'1.0-0') ?? '0'"
-        [delta]="5.4"
+        [delta]="adrDelta()"
         deltaLabel="MTD"
         [loading]="loading()" />
       <lux-kpi-tile
@@ -113,7 +119,12 @@ import {
             <div class="agenda-icon" data-tone="info"><mat-icon>flight_land</mat-icon></div>
             <div class="agenda-body">
               <div class="agenda-title">{{ arrivalsToday() }} arrivals expected</div>
-              <div class="agenda-meta">First check-in 14:00 · 3 VIP guests</div>
+              <div class="agenda-meta">
+                First check-in {{ checkInTime() }}
+                @if (vipArrivalsToday() > 0) {
+                  · {{ vipArrivalsToday() }} VIP {{ vipArrivalsToday() === 1 ? 'guest' : 'guests' }}
+                }
+              </div>
             </div>
             <span class="agenda-chip">→</span>
           </li>
@@ -121,7 +132,9 @@ import {
             <div class="agenda-icon" data-tone="warning"><mat-icon>flight_takeoff</mat-icon></div>
             <div class="agenda-body">
               <div class="agenda-title">{{ departuresToday() }} departures</div>
-              <div class="agenda-meta">12 rooms to flip by 15:00</div>
+              <div class="agenda-meta">
+                {{ departuresToday() }} {{ departuresToday() === 1 ? 'room' : 'rooms' }} to flip by {{ checkOutTime() }}
+              </div>
             </div>
             <span class="agenda-chip">→</span>
           </li>
@@ -129,15 +142,27 @@ import {
             <div class="agenda-icon" data-tone="success"><mat-icon>cleaning_services</mat-icon></div>
             <div class="agenda-body">
               <div class="agenda-title">{{ cleaningCount() }} rooms in housekeeping</div>
-              <div class="agenda-meta">Avg cleaning time today: 28 min</div>
+              <div class="agenda-meta">
+                @if (avgCleaningTime() > 0) {
+                  Avg cleaning time today: {{ avgCleaningTime() }} min
+                } @else {
+                  No completed tasks yet today
+                }
+              </div>
             </div>
             <span class="agenda-chip">→</span>
           </li>
           <li>
             <div class="agenda-icon" data-tone="danger"><mat-icon>build</mat-icon></div>
             <div class="agenda-body">
-              <div class="agenda-title">3 open maintenance tickets</div>
-              <div class="agenda-meta">1 high priority — AC unit, Room 401</div>
+              <div class="agenda-title">{{ openMaintenanceCount() }} open maintenance ticket{{ openMaintenanceCount() === 1 ? '' : 's' }}</div>
+              <div class="agenda-meta">
+                @if (topMaintenanceTicket(); as ticket) {
+                  {{ ticket.priorityLabel }} priority — {{ ticket.title }}{{ ticket.room ? ', ' + ticket.room : '' }}
+                } @else {
+                  No open issues
+                }
+              </div>
             </div>
             <span class="agenda-chip">→</span>
           </li>
@@ -149,7 +174,7 @@ import {
       <header class="card-header">
         <div>
           <h3>Recent reservations</h3>
-          <p class="muted">Last 8 bookings across all sources</p>
+          <p class="muted">{{ recentReservations().length }} most recent bookings across all sources</p>
         </div>
         <a class="link">All reservations →</a>
       </header>
@@ -181,6 +206,21 @@ import {
           }
         </tbody>
       </table>
+      <div class="show-more-row">
+        @if (reservationLimit() < reservations().length) {
+          <button mat-button (click)="showMoreReservations()">
+            Show more
+            <mat-icon>expand_more</mat-icon>
+          </button>
+        }
+        @if (reservationLimit() > 8) {
+          <button mat-button (click)="showLessReservations()">
+            Show less
+            <mat-icon>expand_less</mat-icon>
+          </button>
+        }
+        <span class="show-more-count">Showing {{ recentReservations().length }} of {{ reservations().length }}</span>
+      </div>
     </section>
   `,
   styles: [`
@@ -281,19 +321,43 @@ import {
       text-transform: capitalize;
       color: var(--text-muted);
     }
+
+    .show-more-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-3) var(--space-3) 0;
+      border-top: 1px solid var(--border);
+      margin-top: var(--space-2);
+    }
+    .show-more-count {
+      margin-left: auto;
+      font-size: var(--text-xs);
+      color: var(--text-subtle);
+    }
   `],
 })
 export class DashboardComponent {
-  private ctx = inject(PropertyContextService);
-  private roomSvc = inject(ROOM_SERVICE);
-  private resSvc  = inject(RESERVATION_SERVICE);
+  private ctx          = inject(PropertyContextService);
+  private roomSvc      = inject(ROOM_SERVICE);
+  private resSvc       = inject(RESERVATION_SERVICE);
+  private guestSvc     = inject(GUEST_SERVICE);
+  private housekeepingSvc = inject(HOUSEKEEPING_SERVICE);
+  private maintenanceSvc  = inject(MAINTENANCE_SERVICE);
+  private analyticsSvc    = inject(ANALYTICS_SERVICE);
 
-  loading = signal(true);
-  rooms = signal<Room[]>([]);
+  loading      = signal(true);
+  rooms        = signal<Room[]>([]);
   reservations = signal<Reservation[]>([]);
+  guests       = signal<Guest[]>([]);
+  hskTasks     = signal<HousekeepingTask[]>([]);
+  maintenance  = signal<MaintenanceRequest[]>([]);
+  snapshots    = signal<AnalyticsSnapshot[]>([]);
+
+  /* ── Greeting ─────────────────────────────────────────────── */
 
   greeting = computed(() => {
-    const hour = new Date().getHours();
+    const hour  = new Date().getHours();
     const phase = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
     return `${phase} — ${this.ctx.active()?.name ?? 'Dashboard'}`;
   });
@@ -306,20 +370,46 @@ export class DashboardComponent {
     return prop ? `${today} · ${prop.city}, ${prop.country}` : today;
   });
 
+  /* ── Property time settings ───────────────────────────────── */
+
+  checkInTime  = computed(() => this.ctx.active()?.checkInTime  ?? '14:00');
+  checkOutTime = computed(() => this.ctx.active()?.checkOutTime ?? '12:00');
+
+  /* ── Data loading ─────────────────────────────────────────── */
+
   constructor() {
+    console.log('analyticsSvc injected:', this.analyticsSvc);
     effect(() => {
       const propId = this.ctx.activeId();
+      console.log('propId:', propId);
       if (!propId) return;
+
       this.loading.set(true);
-      this.roomSvc.list(propId).subscribe(rooms => {
-        this.rooms.set(rooms);
-      });
+
+      this.roomSvc.list(propId).subscribe(rooms => this.rooms.set(rooms));
+
       this.resSvc.list(propId).subscribe(res => {
         this.reservations.set(res);
         this.loading.set(false);
       });
+
+      this.guestSvc.list().subscribe(guests => this.guests.set(guests));
+
+      this.housekeepingSvc.listTasks(propId).subscribe(tasks => this.hskTasks.set(tasks));
+
+      this.maintenanceSvc.list(propId).subscribe(items => this.maintenance.set(items));
+
+      this.analyticsSvc.listSnapshots(propId).subscribe({
+        next: snaps => {
+          console.log('analytics snaps received:', snaps.length, snaps.at(-1));
+          this.snapshots.set(snaps);
+        },
+        error: err => console.error('analytics error:', err),
+      });
     });
   }
+
+  /* ── KPI signals ──────────────────────────────────────────── */
 
   occupancyPct = computed(() => {
     const rooms = this.rooms();
@@ -329,14 +419,15 @@ export class DashboardComponent {
   });
 
   revenueToday = computed(() => {
-    const today = new Date(); today.setHours(0,0,0,0);
-    // Revenue today = per-night rate of all active in-house guests + today's checkouts
+    const today = new Date(); today.setHours(0, 0, 0, 0);
     return this.reservations()
-      .filter(r => r.status === ReservationStatus.CheckedIn || r.status === ReservationStatus.CheckedOut)
+      .filter(r =>
+        r.status === ReservationStatus.CheckedIn ||
+        r.status === ReservationStatus.CheckedOut,
+      )
       .filter(r => {
-        // Include if the guest is currently in-house (checked in before/on today, checks out after today)
-        const ci = new Date(r.checkIn);  ci.setHours(0,0,0,0);
-        const co = new Date(r.checkOut); co.setHours(0,0,0,0);
+        const ci = new Date(r.checkIn);  ci.setHours(0, 0, 0, 0);
+        const co = new Date(r.checkOut); co.setHours(0, 0, 0, 0);
         return ci.getTime() <= today.getTime() && co.getTime() > today.getTime();
       })
       .reduce((sum, r) => sum + (r.nights > 0 ? r.totalRoomCharge / r.nights : 0), 0);
@@ -351,18 +442,18 @@ export class DashboardComponent {
   });
 
   arrivalsToday = computed(() => {
-    const today = new Date(); today.setHours(0,0,0,0);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
     return this.reservations().filter(r => {
       if (r.status !== ReservationStatus.Confirmed && r.status !== ReservationStatus.CheckedIn) return false;
-      const d = new Date(r.checkIn); d.setHours(0,0,0,0);
+      const d = new Date(r.checkIn); d.setHours(0, 0, 0, 0);
       return d.getTime() === today.getTime();
     }).length;
   });
 
   departuresToday = computed(() => {
-    const today = new Date(); today.setHours(0,0,0,0);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
     return this.reservations().filter(r => {
-      const d = new Date(r.checkOut); d.setHours(0,0,0,0);
+      const d = new Date(r.checkOut); d.setHours(0, 0, 0, 0);
       return d.getTime() === today.getTime() && r.status === ReservationStatus.CheckedIn;
     }).length;
   });
@@ -374,6 +465,131 @@ export class DashboardComponent {
   cleaningCount = computed(() =>
     this.rooms().filter(r => r.status === RoomStatus.Cleaning).length,
   );
+
+  /* ── KPI delta signals (derived from analyticsSnapshots) ─────── */
+
+  /**
+   * Returns the percentage-point change in occupancy rate
+   * between today's snapshot and 7 days ago. Positive = improved.
+   */
+  occupancyDelta = computed(() => {
+    const snaps = this.snapshots();
+    if (snaps.length < 2) return 0;
+    const today    = snaps[snaps.length - 1];
+    const weekAgo  = snaps[snaps.length - 8] ?? snaps[0];
+    if (!weekAgo) return 0;
+    return Math.round(((today.occupancyRate - weekAgo.occupancyRate) * 100) * 10) / 10;
+  });
+
+  /**
+   * Returns the percentage change in total revenue
+   * between today's snapshot and yesterday's snapshot.
+   */
+  revenueDelta = computed(() => {
+    const snaps = this.snapshots();
+    if (snaps.length < 2) return 0;
+    const today     = snaps[snaps.length - 1];
+    const yesterday = snaps[snaps.length - 2];
+    if (!yesterday.totalRevenue) return 0;
+    const pct = ((today.totalRevenue - yesterday.totalRevenue) / yesterday.totalRevenue) * 100;
+    return Math.round(pct * 10) / 10;
+  });
+
+  /**
+   * Returns the percentage change in ADR comparing today's snapshot
+   * against the MTD average (all prior snapshots this month).
+   */
+  adrDelta = computed(() => {
+    const snaps = this.snapshots();
+    if (snaps.length < 2) return 0;
+    const today  = snaps[snaps.length - 1];
+    const month  = today.date.slice(0, 7); // 'YYYY-MM'
+    const mtd    = snaps.filter(s => s.date.startsWith(month) && s.date < today.date);
+    if (!mtd.length) return 0;
+    const avgAdr = mtd.reduce((sum, s) => sum + s.adr, 0) / mtd.length;
+    if (!avgAdr) return 0;
+    const pct = ((today.adr - avgAdr) / avgAdr) * 100;
+    return Math.round(pct * 10) / 10;
+  });
+
+  /* ── Agenda computed signals ──────────────────────────────── */
+
+  /** Number of VIP guests arriving today. */
+  vipArrivalsToday = computed(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const todayResGuestIds = new Set(
+      this.reservations()
+        .filter(r => {
+          if (r.status !== ReservationStatus.Confirmed && r.status !== ReservationStatus.CheckedIn) return false;
+          const d = new Date(r.checkIn); d.setHours(0, 0, 0, 0);
+          return d.getTime() === today.getTime();
+        })
+        .map(r => r.guestId),
+    );
+    return this.guests().filter(g => g.isVip && todayResGuestIds.has(g.id)).length;
+  });
+
+  /** Average duration (minutes) of housekeeping tasks completed today. */
+  avgCleaningTime = computed(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const completed = this.hskTasks().filter(t => {
+      if (!t.completedAt || !t.durationMinutes) return false;
+      const d = new Date(t.completedAt); d.setHours(0, 0, 0, 0);
+      return d.getTime() === today.getTime();
+    });
+    if (!completed.length) return 0;
+    const total = completed.reduce((s, t) => s + (t.durationMinutes ?? 0), 0);
+    return Math.round(total / completed.length);
+  });
+
+  /** Count of open or in-progress maintenance requests. */
+  openMaintenanceCount = computed(() =>
+    this.maintenance().filter(m =>
+      m.status === MaintenanceStatus.Open ||
+      m.status === MaintenanceStatus.Assigned ||
+      m.status === MaintenanceStatus.InProgress,
+    ).length,
+  );
+
+  /**
+   * The most urgent open maintenance ticket — highest priority first,
+   * then most recently reported. Returns a display-ready object or null.
+   */
+  topMaintenanceTicket = computed(() => {
+    const priorityOrder: Record<string, number> = {
+      [MaintenancePriority.Urgent]: 0,
+      [MaintenancePriority.High]:   1,
+      [MaintenancePriority.Medium]: 2,
+      [MaintenancePriority.Low]:    3,
+    };
+
+    const open = this.maintenance()
+      .filter(m =>
+        m.status === MaintenanceStatus.Open ||
+        m.status === MaintenanceStatus.Assigned ||
+        m.status === MaintenanceStatus.InProgress,
+      )
+      .sort((a, b) => {
+        const pd = (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9);
+        if (pd !== 0) return pd;
+        return b.reportedAt.getTime() - a.reportedAt.getTime();
+      });
+
+    if (!open.length) return null;
+
+    const top = open[0];
+    const roomNum = top.roomId
+      ? top.roomId.split('-r-')[1]   // e.g. 'prop-1-r-401' → '401'
+      : top.location ?? null;
+
+    return {
+      title:         top.title,
+      priorityLabel: top.priority.charAt(0).toUpperCase() + top.priority.slice(1),
+      room:          roomNum ? `Room ${roomNum}` : null,
+    };
+  });
+
+  /* ── Room status breakdown ────────────────────────────────── */
 
   roomStatusBreakdown = computed(() => {
     const rooms = this.rooms();
@@ -395,39 +611,51 @@ export class DashboardComponent {
   recentReservations = computed(() =>
     [...this.reservations()]
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .slice(0, 8),
+      .slice(0, this.reservationLimit()),
   );
 
+  reservationLimit = signal(8);
+
+  showMoreReservations() {
+    this.reservationLimit.update(n => n + 8);
+  }
+
+  showLessReservations() {
+    this.reservationLimit.set(8);
+  }
+
+  /* ── Helpers ──────────────────────────────────────────────── */
+
   statusVariant(s: RoomStatus): any {
-    return {
-      [RoomStatus.Available]:  'success',
-      [RoomStatus.Occupied]:   'info',
-      [RoomStatus.Reserved]:   'warning',
-      [RoomStatus.Cleaning]:   'accent',
-      [RoomStatus.Maintenance]:'danger',
-      [RoomStatus.Blocked]:    'neutral',
-    }[s];
+    return ({
+      [RoomStatus.Available]:   'success',
+      [RoomStatus.Occupied]:    'info',
+      [RoomStatus.Reserved]:    'warning',
+      [RoomStatus.Cleaning]:    'accent',
+      [RoomStatus.Maintenance]: 'danger',
+      [RoomStatus.Blocked]:     'neutral',
+    } as Record<string, string>)[s];
   }
 
   resStatusVariant(s: ReservationStatus): any {
-    return {
+    return ({
       [ReservationStatus.Pending]:    'neutral',
       [ReservationStatus.Confirmed]:  'info',
       [ReservationStatus.CheckedIn]:  'success',
       [ReservationStatus.CheckedOut]: 'neutral',
       [ReservationStatus.Cancelled]:  'danger',
       [ReservationStatus.NoShow]:     'warning',
-    }[s];
+    } as Record<string, string>)[s];
   }
 
   statusLabel(s: ReservationStatus): string {
     return ({
-      [ReservationStatus.Pending]: 'Pending',
-      [ReservationStatus.Confirmed]: 'Confirmed',
-      [ReservationStatus.CheckedIn]: 'Checked in',
+      [ReservationStatus.Pending]:    'Pending',
+      [ReservationStatus.Confirmed]:  'Confirmed',
+      [ReservationStatus.CheckedIn]:  'Checked in',
       [ReservationStatus.CheckedOut]: 'Checked out',
-      [ReservationStatus.Cancelled]: 'Cancelled',
-      [ReservationStatus.NoShow]: 'No show',
+      [ReservationStatus.Cancelled]:  'Cancelled',
+      [ReservationStatus.NoShow]:     'No show',
     } as Record<string, string>)[s] ?? s;
   }
 }

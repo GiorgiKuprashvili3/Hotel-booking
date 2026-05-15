@@ -8,6 +8,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { AuthService } from '../../../core/auth/auth.service';
 import { Role } from '../../../domain/enums';
+import { DEMO_USERS } from '../../../core/auth/models/demo-users';
 
 interface DemoCard {
   role: Role;
@@ -16,6 +17,15 @@ interface DemoCard {
   icon: string;
   accent: string;
 }
+
+/** Icon and accent colour per role — purely presentational config, not business data. */
+const ROLE_DISPLAY: Record<Role, { icon: string; accent: string }> = {
+  [Role.Admin]:        { icon: 'shield_person',      accent: '#C9A961' },
+  [Role.Manager]:      { icon: 'workspace_premium',  accent: '#1A3A5C' },
+  [Role.Receptionist]: { icon: 'concierge',          accent: '#4A6B8A' },
+  [Role.Housekeeper]:  { icon: 'cleaning_services',  accent: '#4A7C59' },
+  [Role.Accountant]:   { icon: 'calculate',          accent: '#7C4A6B' },
+};
 
 @Component({
   selector: 'lux-login',
@@ -266,15 +276,40 @@ export class LoginComponent {
   private auth = inject(AuthService);
   private router = inject(Router);
 
-  email = 'henri.beaumont@luxstay.demo';
+  /** Pre-fill with the Manager demo user's email so it looks realistic. */
+  email    = DEMO_USERS[Role.Manager].email;
   password = '••••••••';
 
-  demoCards: DemoCard[] = [
-    { role: Role.Admin,        title: 'Admin',        description: 'Full system access, all properties',  icon: 'shield_person',  accent: '#C9A961' },
-    { role: Role.Manager,      title: 'Manager',      description: 'Operations + analytics dashboard',     icon: 'workspace_premium', accent: '#1A3A5C' },
-    { role: Role.Receptionist, title: 'Receptionist', description: 'Front desk, reservations, guests',     icon: 'concierge',       accent: '#4A6B8A' },
-    { role: Role.Housekeeper,  title: 'Housekeeper',  description: 'Cleaning tasks and maintenance',       icon: 'cleaning_services', accent: '#4A7C59' },
-  ];
+  /**
+   * Build demo cards entirely from DEMO_USERS — no hardcoded strings.
+   * Description is derived from the user's name, role, and property count.
+   */
+  demoCards: DemoCard[] = (Object.values(Role) as Role[])
+    .filter(role => role in DEMO_USERS && role in ROLE_DISPLAY)
+    .map(role => {
+      const user    = DEMO_USERS[role];
+      const display = ROLE_DISPLAY[role];
+      const propCount = user.propertyIds.length;
+      const propLabel = propCount === 1
+        ? '1 property'
+        : `${propCount} properties`;
+
+      const roleDescriptions: Record<Role, string> = {
+        [Role.Admin]:        `Full system access · ${propLabel}`,
+        [Role.Manager]:      `Operations & analytics · ${propLabel}`,
+        [Role.Receptionist]: `Front desk & reservations · ${propLabel}`,
+        [Role.Housekeeper]:  `Cleaning tasks & maintenance · ${propLabel}`,
+        [Role.Accountant]:   `Financials & reporting · ${propLabel}`,
+      };
+
+      return {
+        role,
+        title: user.firstName + ' ' + user.lastName,
+        description: roleDescriptions[role],
+        icon:   display.icon,
+        accent: display.accent,
+      };
+    });
 
   loginAs(role: Role) {
     this.auth.loginAsDemo(role);
