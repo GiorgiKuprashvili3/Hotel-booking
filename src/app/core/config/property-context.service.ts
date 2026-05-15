@@ -1,4 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { toObservable } from '@angular/core/rxjs-interop';
 import { PROPERTY_SERVICE } from '../../data/services/service-tokens';
 import { Property } from '../../domain';
 
@@ -15,6 +16,9 @@ export class PropertyContextService {
   readonly activeId   = this._activeId.asReadonly();
   readonly active     = computed(() =>
     this._properties().find(p => p.id === this._activeId()) ?? null);
+
+  /** Observable version of `active` — required by CalendarPageComponent */
+  readonly active$ = toObservable(this.active);
 
   load(): void {
     this.svc.list().subscribe(list => {

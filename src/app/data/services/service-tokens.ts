@@ -46,6 +46,7 @@ export interface IGuestService {
   list(params?: GuestQuery): Observable<Guest[]>;
   getById(id: string): Observable<Guest | undefined>;
   search(query: string): Observable<Guest[]>;
+  create(data: Partial<Guest>): Observable<Guest>;
 }
 
 export interface GuestQuery {
