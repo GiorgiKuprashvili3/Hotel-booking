@@ -1,0 +1,187 @@
+@use '@angular/material' as mat;
+
+/* ============================================================
+   Material 18 (M3) theme
+   We define a primary palette anchored to navy and a tertiary
+   palette anchored to gold. Then we override the M3 system
+   tokens to use our CSS variables so light/dark theming works.
+   ============================================================ */
+
+$luxstay-theme: mat.define-theme((
+  color: (
+    theme-type: light,
+    primary: mat.$azure-palette,
+    tertiary: mat.$yellow-palette,
+  ),
+  typography: (
+    plain-family: 'Inter, sans-serif',
+    brand-family: 'Playfair Display, serif',
+  ),
+  density: (
+    scale: -1,
+  ),
+));
+
+$luxstay-dark-theme: mat.define-theme((
+  color: (
+    theme-type: dark,
+    primary: mat.$azure-palette,
+    tertiary: mat.$yellow-palette,
+  ),
+  density: (
+    scale: -1,
+  ),
+));
+
+html {
+  @include mat.all-component-themes($luxstay-theme);
+}
+
+/* Swap only color styles for dark mode — avoids re-emitting typography/density */
+[data-theme="dark"] {
+  @include mat.all-component-colors($luxstay-dark-theme);
+}
+
+/* ---------- Override M3 system tokens to use brand palette ---------- */
+:root {
+  --mat-sys-primary: var(--primary);
+  --mat-sys-on-primary: var(--on-primary);
+  --mat-sys-primary-container: var(--navy-800);
+  --mat-sys-on-primary-container: #FFFFFF;
+
+  --mat-sys-tertiary: var(--accent);
+  --mat-sys-on-tertiary: var(--on-accent);
+
+  --mat-sys-surface: var(--surface);
+  --mat-sys-surface-container: var(--surface-2);
+  --mat-sys-surface-container-high: var(--surface-3);
+  --mat-sys-on-surface: var(--text);
+  --mat-sys-on-surface-variant: var(--text-muted);
+
+  --mat-sys-outline: var(--border-strong);
+  --mat-sys-outline-variant: var(--border);
+
+  --mat-sys-error: var(--danger);
+  --mat-sys-error-container: var(--danger-bg);
+
+  --mat-sys-background: var(--bg);
+  --mat-sys-on-background: var(--text);
+}
+
+/* ---------- Component-level tweaks ---------- */
+
+/* Buttons: tighten radius, add gold-shadow on hover for primary */
+.mat-mdc-button-base {
+  letter-spacing: 0.01em !important;
+  font-weight: 500 !important;
+  border-radius: var(--radius-md) !important;
+}
+
+.mat-mdc-raised-button.mat-primary,
+.mat-mdc-unelevated-button.mat-primary {
+  transition: box-shadow var(--t-base), transform var(--t-fast);
+  &:hover:not(:disabled) {
+    box-shadow: var(--shadow-2);
+  }
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+}
+
+/* Cards: replace Material's heavy elevation with our subtle shadow */
+.mat-mdc-card {
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-1) !important;
+  border: 1px solid var(--border);
+  background: var(--surface) !important;
+}
+
+/* Form fields: a bit tighter */
+.mat-mdc-form-field {
+  width: 100%;
+}
+
+/* Tables */
+.mat-mdc-table {
+  background: var(--surface) !important;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.mat-mdc-header-row {
+  background: var(--surface-2) !important;
+}
+
+.mat-mdc-header-cell {
+  color: var(--text-muted) !important;
+  font-weight: 600 !important;
+  font-size: var(--text-xs) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mat-mdc-row:hover {
+  background: var(--surface-2) !important;
+}
+
+/* Menu / dropdown */
+.mat-mdc-menu-panel {
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-2) !important;
+  border: 1px solid var(--border);
+}
+
+/* Dialog */
+.mat-mdc-dialog-container .mdc-dialog__surface {
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-3) !important;
+}
+
+/* Snackbar */
+.mat-mdc-snack-bar-container {
+  --mdc-snackbar-container-color: var(--navy-800);
+  --mat-snack-bar-button-color: var(--gold-300);
+  --mdc-snackbar-supporting-text-color: #FFFFFF;
+}
+
+/* Sidenav */
+.mat-drawer {
+  background: var(--navy-900) !important;
+  color: #FFFFFF !important;
+  border-right: none !important;
+}
+
+/* Tooltip */
+.mat-mdc-tooltip {
+  --mdc-plain-tooltip-container-color: var(--navy-900);
+  --mdc-plain-tooltip-supporting-text-color: var(--cream-50);
+  font-size: var(--text-xs) !important;
+}
+
+/* Tabs underline → gold */
+.mat-mdc-tab .mdc-tab-indicator__content--underline {
+  border-color: var(--accent) !important;
+}
+.mat-mdc-tab.mdc-tab--active .mdc-tab__text-label {
+  color: var(--accent) !important;
+}
+
+/* Chip */
+.mat-mdc-chip {
+  border-radius: var(--radius-full) !important;
+  font-size: var(--text-xs) !important;
+  font-weight: 500 !important;
+  height: 24px !important;
+}
+
+/* Notification dropdown — fixed width */
+.notif-menu .mat-mdc-menu-panel,
+.mat-mdc-menu-panel.notif-menu {
+  min-width: 300px !important;
+  max-width: 340px !important;
+}
+
+/* Property menu — wider to fit property names */
+.mat-mdc-menu-panel {
+  min-width: 200px;
+}

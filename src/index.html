@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>LuxStay Collection</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+
+  <!-- Fonts & Icons — loaded first so they're available immediately -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+  <!--
+    INLINE CSS VARIABLES — guaranteed to load even if styles.css
+    isn't yet wired into angular.json. Once you add styles.css to
+    angular.json these are harmlessly overridden.
+  -->
+  <style>
+    :root {
+      --navy:         #0F1B35;
+      --accent-gold:  #C9A84C;
+      --primary:      #2563EB;
+      --primary-hover:#1D4ED8;
+      --bg:           #F6F3EE;
+      --surface:      #FFFFFF;
+      --surface-2:    #F1EDE7;
+      --border:       #E5E0D8;
+      --text:         #111827;
+      --text-muted:   #6B7280;
+      --text-subtle:  #9CA3AF;
+      --success:      #16A34A;  --success-bg: #DCFCE7;
+      --info:         #2563EB;  --info-bg:    #DBEAFE;
+      --warning:      #D97706;  --warning-bg: #FEF3C7;
+      --danger:       #DC2626;  --danger-bg:  #FEE2E2;
+      --accent:       #7C3AED;  --accent-bg:  #EDE9FE;
+      --space-1:4px; --space-2:8px;  --space-3:12px; --space-4:16px;
+      --space-5:20px;--space-6:24px; --space-8:32px; --space-10:40px;
+      --text-xs:11px; --text-sm:13px; --text-base:15px; --text-lg:17px;
+      --text-xl:20px; --text-2xl:24px; --text-3xl:30px;
+      --radius-sm:4px; --radius-md:8px; --radius-lg:12px;
+      --radius-xl:16px; --radius-full:9999px;
+      --t-fast:120ms ease; --t-base:200ms ease; --t-slow:350ms ease;
+    }
+
+    /* Base reset — in case styles.css isn't loaded yet */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 15px;
+      color: #111827;
+      background: #F6F3EE;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Material Icons ligature rendering — critical fix for icon text bleed */
+    .material-icons, mat-icon {
+      font-family: 'Material Icons' !important;
+      font-weight: normal !important;
+      font-style: normal !important;
+      line-height: 1 !important;
+      letter-spacing: normal !important;
+      text-transform: none !important;
+      white-space: nowrap !important;
+      word-wrap: normal !important;
+      direction: ltr !important;
+      -webkit-font-feature-settings: 'liga' !important;
+      font-feature-settings: 'liga' !important;
+      -webkit-font-smoothing: antialiased !important;
+    }
+    /* Suppress browser focus-outline flash on mouse click for all buttons/links.
+       :focus-visible keeps keyboard navigation accessible. */
+    button:focus, a:focus, [tabindex]:focus { outline: none; }
+    button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
+      outline: 2px solid #2563EB;
+      outline-offset: 2px;
+    }
+    button { -webkit-tap-highlight-color: transparent; }
+  </style>
+</head>
+<body>
+  <lux-root></lux-root>
+</body>
+</html>
