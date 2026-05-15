@@ -174,6 +174,37 @@ export class MockGuestService implements IGuestService {
   search(query: string): Observable<Guest[]> {
     return this.list({ search: query });
   }
+  create(data: Partial<Guest>): Observable<Guest> {
+    const now = new Date();
+    const guest: Guest = {
+      id:            `guest-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      firstName:     data.firstName ?? '',
+      lastName:      data.lastName ?? '',
+      email:         data.email ?? '',
+      phone:         data.phone ?? '',
+      nationality:   data.nationality ?? 'Unknown',
+      idType:        data.idType ?? 'passport',
+      idNumber:      data.idNumber ?? '',
+      idPhotoUrl:    data.idPhotoUrl,
+      dateOfBirth:   data.dateOfBirth,
+      address:       data.address,
+      isVip:         data.isVip ?? false,
+      loyaltyTier:   data.loyaltyTier,
+      loyaltyPoints: data.loyaltyPoints ?? 0,
+      preferences:   data.preferences ?? {
+        smokingPreference: false,
+        dietary: [],
+      },
+      tags:          data.tags ?? [],
+      notes:         data.notes,
+      totalStays:    data.totalStays ?? 0,
+      totalSpent:    data.totalSpent ?? 0,
+      lastStayDate:  data.lastStayDate,
+      createdAt:     now,
+    };
+    getSeedDataset().guests.push(guest);
+    return latency(guest);
+  }
 }
 
 /* ---------- Staff ---------- */
