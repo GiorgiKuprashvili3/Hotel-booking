@@ -9,7 +9,7 @@ import {
 import {
   Property, Room, RoomType, Guest, Reservation, Staff,
   HousekeepingTask, MaintenanceRequest, ConciergeRequest,
-  RoomStatus, ReservationStatus, HousekeepingStatus, Folio, FolioItem, Payment,
+  RoomStatus, ReservationStatus, HousekeepingStatus, MaintenanceStatus, Folio, FolioItem, Payment,
   PaymentMethod, RoomStatusHistory,
 } from '../../../domain';
 import { getSeedDataset, AnalyticsSnapshotRaw } from '../seed/seed-generator';
@@ -427,6 +427,20 @@ export class MockHousekeepingService implements IHousekeepingService {
     if (t.startedAt) t.durationMinutes = Math.round((t.completedAt.getTime() - t.startedAt.getTime()) / 60000);
     return latency(t);
   }
+  inspectTask(taskId: string, inspectorId: string): Observable<HousekeepingTask> {
+    const t = getSeedDataset().housekeepingTasks.find(x => x.id === taskId);
+    if (!t) return throwError(() => new Error('Task not found'));
+    t.status = HousekeepingStatus.Inspected;
+    t.inspectedAt = new Date();
+    t.inspectedBy = inspectorId;
+    return latency(t);
+  }
+  updateNotes(taskId: string, notes: string): Observable<HousekeepingTask> {
+    const t = getSeedDataset().housekeepingTasks.find(x => x.id === taskId);
+    if (!t) return throwError(() => new Error('Task not found'));
+    t.notes = notes;
+    return latency(t);
+  }
 }
 
 /* ---------- Maintenance ---------- */
@@ -451,6 +465,22 @@ export class MockMaintenanceService implements IMaintenanceService {
     } as MaintenanceRequest;
     ds.maintenance.push(item);
     return latency(item);
+  }
+  updateStatus(
+    id: string,
+    status: MaintenanceStatus,
+    assignedTo?: string,
+    resolutionNotes?: string,
+  ): Observable<MaintenanceRequest> {
+    const m = getSeedDataset().maintenance.find(x => x.id === id);
+    if (!m) return throwError(() => new Error('Request not found'));
+    m.status = status;
+    if (assignedTo !== undefined) m.assignedTo = assignedTo;
+    if (resolutionNotes !== undefined) m.resolutionNotes = resolutionNotes;
+    if (status === MaintenanceStatus.Resolved || status === MaintenanceStatus.Closed) {
+      m.resolvedAt = new Date();
+    }
+    return latency(m);
   }
 }
 

@@ -6,12 +6,7 @@ import {
   Staff, ReservationStatus, RoomStatus, Folio, FolioItem, Payment,
   RoomStatusHistory,
 } from '../../domain';
-
-/* ============================================================
-   Service interfaces — the contract.
-   Mock impls live in /data/mock/impl
-   Real HTTP impls will live in /data/http  (later, when NestJS is ready)
-   ============================================================ */
+import { MaintenanceStatus } from '../../domain/enums';
 
 export interface IPropertyService {
   list(): Observable<Property[]>;
@@ -92,11 +87,19 @@ export interface IHousekeepingService {
   assignTask(taskId: string, staffId: string): Observable<HousekeepingTask>;
   startTask(taskId: string): Observable<HousekeepingTask>;
   completeTask(taskId: string): Observable<HousekeepingTask>;
+  inspectTask(taskId: string, inspectorId: string): Observable<HousekeepingTask>;
+  updateNotes(taskId: string, notes: string): Observable<HousekeepingTask>;
 }
 
 export interface IMaintenanceService {
   list(propertyId: string): Observable<MaintenanceRequest[]>;
   create(data: Partial<MaintenanceRequest>): Observable<MaintenanceRequest>;
+  updateStatus(
+    id: string,
+    status: MaintenanceStatus,
+    assignedTo?: string,
+    resolutionNotes?: string,
+  ): Observable<MaintenanceRequest>;
 }
 
 export interface IConciergeService {
@@ -104,7 +107,6 @@ export interface IConciergeService {
   updateStatus(id: string, status: string): Observable<ConciergeRequest>;
 }
 
-/* ---------- Injection tokens ---------- */
 export interface AnalyticsSnapshot {
   date: string;
   propertyId: string;
