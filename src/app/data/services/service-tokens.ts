@@ -4,14 +4,19 @@ import {
   Guest, Property, Reservation, Room, RoomType,
   HousekeepingTask, MaintenanceRequest, ConciergeRequest,
   Staff, ReservationStatus, RoomStatus, Folio, FolioItem, Payment,
-  RoomStatusHistory,
+  RoomStatusHistory, AuditLog, LoyaltyProgram, LoyaltyPromotion,
+  LoyaltyPointsLedgerEntry, RatePlan, PropertySettings,
 } from '../../domain';
 import { MaintenanceStatus } from '../../domain/enums';
+
+/* ── Property ─────────────────────────────────────────────────── */
 
 export interface IPropertyService {
   list(): Observable<Property[]>;
   getById(id: string): Observable<Property | undefined>;
 }
+
+/* ── Room ─────────────────────────────────────────────────────── */
 
 export interface IRoomService {
   list(propertyId: string): Observable<Room[]>;
@@ -20,6 +25,8 @@ export interface IRoomService {
   updateStatus(id: string, status: RoomStatus, note?: string): Observable<Room>;
   listStatusHistory(roomId: string): Observable<RoomStatusHistory[]>;
 }
+
+/* ── Reservation ──────────────────────────────────────────────── */
 
 export interface IReservationService {
   list(propertyId: string, params?: ReservationQuery): Observable<Reservation[]>;
@@ -62,6 +69,8 @@ export interface ReservationQuery {
   to?: Date;
 }
 
+/* ── Guest ────────────────────────────────────────────────────── */
+
 export interface IGuestService {
   list(params?: GuestQuery): Observable<Guest[]>;
   getById(id: string): Observable<Guest | undefined>;
@@ -77,10 +86,29 @@ export interface GuestQuery {
   search?: string;
 }
 
+/* ── Staff ────────────────────────────────────────────────────── */
+
 export interface IStaffService {
   list(propertyId?: string): Observable<Staff[]>;
   getById(id: string): Observable<Staff | undefined>;
+  /** Create a new staff member and send an invite email (mocked). */
+  invite(data: InviteStaffPayload): Observable<Staff>;
+  /** Update role, propertyIds, isActive, shift, etc. */
+  update(id: string, patch: Partial<Staff>): Observable<Staff>;
+  /** Soft-delete: sets isActive = false. */
+  deactivate(id: string): Observable<Staff>;
 }
+
+export interface InviteStaffPayload {
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: string;
+  propertyIds: string[];
+  phone?: string;
+}
+
+/* ── Housekeeping ─────────────────────────────────────────────── */
 
 export interface IHousekeepingService {
   listTasks(propertyId: string): Observable<HousekeepingTask[]>;
@@ -90,6 +118,8 @@ export interface IHousekeepingService {
   inspectTask(taskId: string, inspectorId: string): Observable<HousekeepingTask>;
   updateNotes(taskId: string, notes: string): Observable<HousekeepingTask>;
 }
+
+/* ── Maintenance ──────────────────────────────────────────────── */
 
 export interface IMaintenanceService {
   list(propertyId: string): Observable<MaintenanceRequest[]>;
@@ -102,10 +132,17 @@ export interface IMaintenanceService {
   ): Observable<MaintenanceRequest>;
 }
 
+/* ── Concierge ────────────────────────────────────────────────── */
+
 export interface IConciergeService {
   list(propertyId: string): Observable<ConciergeRequest[]>;
-  updateStatus(id: string, status: string): Observable<ConciergeRequest>;
+  /** Create a new concierge request (used by the new-request dialog). */
+  create(data: Partial<ConciergeRequest>): Observable<ConciergeRequest>;
+  updateStatus(id: string, status: string, assignedTo?: string): Observable<ConciergeRequest>;
+  update(id: string, patch: Partial<ConciergeRequest>): Observable<ConciergeRequest>;
 }
+
+/* ── Analytics ────────────────────────────────────────────────── */
 
 export interface AnalyticsSnapshot {
   date: string;
@@ -130,12 +167,68 @@ export interface IAnalyticsService {
   getSnapshot(propertyId: string, date: string): Observable<AnalyticsSnapshot | undefined>;
 }
 
-export const PROPERTY_SERVICE      = new InjectionToken<IPropertyService>('PROPERTY_SERVICE');
-export const ROOM_SERVICE          = new InjectionToken<IRoomService>('ROOM_SERVICE');
-export const RESERVATION_SERVICE   = new InjectionToken<IReservationService>('RESERVATION_SERVICE');
-export const GUEST_SERVICE         = new InjectionToken<IGuestService>('GUEST_SERVICE');
-export const STAFF_SERVICE         = new InjectionToken<IStaffService>('STAFF_SERVICE');
-export const HOUSEKEEPING_SERVICE  = new InjectionToken<IHousekeepingService>('HOUSEKEEPING_SERVICE');
-export const MAINTENANCE_SERVICE   = new InjectionToken<IMaintenanceService>('MAINTENANCE_SERVICE');
-export const CONCIERGE_SERVICE     = new InjectionToken<IConciergeService>('CONCIERGE_SERVICE');
-export const ANALYTICS_SERVICE     = new InjectionToken<IAnalyticsService>('ANALYTICS_SERVICE');
+/* ── Loyalty ──────────────────────────────────────────────────── */
+
+export interface ILoyaltyService {
+  getProgram(): Observable<LoyaltyProgram>;
+  listMembers(params?: LoyaltyMemberQuery): Observable<Guest[]>;
+  getPointsHistory(guestId: string): Observable<LoyaltyPointsLedgerEntry[]>;
+  adjustPoints(guestId: string, points: number, description: string, staffId: string): Observable<Guest>;
+  listPromotions(): Observable<LoyaltyPromotion[]>;
+  createPromotion(data: Partial<LoyaltyPromotion>): Observable<LoyaltyPromotion>;
+  updatePromotion(id: string, patch: Partial<LoyaltyPromotion>): Observable<LoyaltyPromotion>;
+}
+
+export interface LoyaltyMemberQuery {
+  tier?: string;
+  search?: string;
+}
+
+/* ── Audit ────────────────────────────────────────────────────── */
+
+export interface IAuditService {
+  list(params?: AuditQuery): Observable<AuditLog[]>;
+  log(entry: Omit<AuditLog, 'id' | 'timestamp'>): Observable<AuditLog>;
+}
+
+export interface AuditQuery {
+  entityType?: string;
+  entityId?: string;
+  userId?: string;
+  action?: string;
+  from?: Date;
+  to?: Date;
+  limit?: number;
+}
+
+/* ── Rate Plans ───────────────────────────────────────────────── */
+
+export interface IRatePlanService {
+  list(): Observable<RatePlan[]>;
+  create(data: Partial<RatePlan>): Observable<RatePlan>;
+  update(id: string, patch: Partial<RatePlan>): Observable<RatePlan>;
+  deactivate(id: string): Observable<RatePlan>;
+}
+
+/* ── Settings ─────────────────────────────────────────────────── */
+
+export interface ISettingsService {
+  get(): Observable<PropertySettings>;
+  update(patch: Partial<PropertySettings>): Observable<PropertySettings>;
+}
+
+/* ── Injection tokens ─────────────────────────────────────────── */
+
+export const PROPERTY_SERVICE     = new InjectionToken<IPropertyService>('PROPERTY_SERVICE');
+export const ROOM_SERVICE         = new InjectionToken<IRoomService>('ROOM_SERVICE');
+export const RESERVATION_SERVICE  = new InjectionToken<IReservationService>('RESERVATION_SERVICE');
+export const GUEST_SERVICE        = new InjectionToken<IGuestService>('GUEST_SERVICE');
+export const STAFF_SERVICE        = new InjectionToken<IStaffService>('STAFF_SERVICE');
+export const HOUSEKEEPING_SERVICE = new InjectionToken<IHousekeepingService>('HOUSEKEEPING_SERVICE');
+export const MAINTENANCE_SERVICE  = new InjectionToken<IMaintenanceService>('MAINTENANCE_SERVICE');
+export const CONCIERGE_SERVICE    = new InjectionToken<IConciergeService>('CONCIERGE_SERVICE');
+export const ANALYTICS_SERVICE    = new InjectionToken<IAnalyticsService>('ANALYTICS_SERVICE');
+export const LOYALTY_SERVICE      = new InjectionToken<ILoyaltyService>('LOYALTY_SERVICE');
+export const AUDIT_SERVICE        = new InjectionToken<IAuditService>('AUDIT_SERVICE');
+export const RATE_PLAN_SERVICE    = new InjectionToken<IRatePlanService>('RATE_PLAN_SERVICE');
+export const SETTINGS_SERVICE     = new InjectionToken<ISettingsService>('SETTINGS_SERVICE');

@@ -1,7 +1,7 @@
 import {
   ConciergeRequestType, ConciergeStatus,
   HousekeepingStatus, MaintenancePriority, MaintenanceStatus,
-  Role,
+  Role, Permission,
 } from './enums';
 
 export interface Staff {
@@ -11,17 +11,63 @@ export interface Staff {
   email: string;
   phone?: string;
   role: Role;
-  propertyIds: string[];       // a staffer can be assigned to multiple props
+  propertyIds: string[];
   avatarUrl?: string;
   isActive: boolean;
   hiredAt: Date;
+  shift?: 'day' | 'evening' | 'night';
+  languages?: string[];
+  notes?: string;
+  /** Pending invite: staff created but not yet accepted */
+  inviteStatus?: 'pending' | 'accepted';
+  invitedAt?: Date;
+  invitedBy?: string;          // staff id
 }
+
+export interface RolePermissionMatrix {
+  [role: string]: Permission[];
+}
+
+/** Default RBAC — overrideable per property in a real backend. */
+export const DEFAULT_ROLE_PERMISSIONS: RolePermissionMatrix = {
+  [Role.Admin]: [
+    Permission.ViewReservations, Permission.ManageReservations,
+    Permission.ViewGuests,       Permission.ManageGuests,
+    Permission.ViewHousekeeping, Permission.ManageHousekeeping,
+    Permission.ViewMaintenance,  Permission.ManageMaintenance,
+    Permission.ViewFinance,      Permission.ManageFinance,
+    Permission.ViewStaff,        Permission.ManageStaff,
+  ],
+  [Role.Manager]: [
+    Permission.ViewReservations, Permission.ManageReservations,
+    Permission.ViewGuests,       Permission.ManageGuests,
+    Permission.ViewHousekeeping, Permission.ManageHousekeeping,
+    Permission.ViewMaintenance,  Permission.ManageMaintenance,
+    Permission.ViewFinance,
+    Permission.ViewStaff,
+  ],
+  [Role.Receptionist]: [
+    Permission.ViewReservations, Permission.ManageReservations,
+    Permission.ViewGuests,       Permission.ManageGuests,
+    Permission.ViewHousekeeping,
+    Permission.ViewMaintenance,
+  ],
+  [Role.Housekeeper]: [
+    Permission.ViewHousekeeping, Permission.ManageHousekeeping,
+    Permission.ViewMaintenance,  Permission.ManageMaintenance,
+  ],
+  [Role.Accountant]: [
+    Permission.ViewReservations,
+    Permission.ViewGuests,
+    Permission.ViewFinance,      Permission.ManageFinance,
+  ],
+};
 
 export interface HousekeepingTask {
   id: string;
   propertyId: string;
   roomId: string;
-  assignedTo?: string;         // staff id
+  assignedTo?: string;
   status: HousekeepingStatus;
   priority: 'low' | 'normal' | 'high';
   scheduledFor: Date;
@@ -36,9 +82,9 @@ export interface HousekeepingTask {
 export interface MaintenanceRequest {
   id: string;
   propertyId: string;
-  roomId?: string;             // optional — could be common area
-  location?: string;           // 'Pool deck', 'Lobby'
-  reportedBy: string;          // staff id
+  roomId?: string;
+  location?: string;
+  reportedBy: string;
   assignedTo?: string;
   category: 'plumbing' | 'electrical' | 'hvac' | 'furniture' | 'appliance' | 'other';
   priority: MaintenancePriority;
@@ -63,6 +109,10 @@ export interface ConciergeRequest {
   requestedAt: Date;
   completedAt?: Date;
   assignedTo?: string;
+  estimatedCost?: number;
+  actualCost?: number;
+  guestRating?: number;
+  notes?: string;
 }
 
 export interface NotificationItem {
@@ -73,5 +123,5 @@ export interface NotificationItem {
   message: string;
   isRead: boolean;
   createdAt: Date;
-  link?: string;               // route to navigate on click
+  link?: string;
 }

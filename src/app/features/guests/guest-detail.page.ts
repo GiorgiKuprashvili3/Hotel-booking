@@ -20,6 +20,7 @@ const TIER_META: Record<LoyaltyTier, { label: string; color: string; bg: string 
   [LoyaltyTier.Silver]:   { label: 'Silver',   color: '#7C7C7C', bg: 'rgba(124, 124, 124, 0.14)' },
   [LoyaltyTier.Gold]:     { label: 'Gold',     color: 'var(--accent)', bg: 'color-mix(in srgb, var(--accent) 18%, transparent)' },
   [LoyaltyTier.Platinum]: { label: 'Platinum', color: 'var(--primary)', bg: 'color-mix(in srgb, var(--primary) 14%, transparent)' },
+  [LoyaltyTier.Diamond]:  { label: 'Diamond',  color: '#00BCD4', bg: 'rgba(0, 188, 212, 0.12)' },
 };
 
 const STATUS_META: Record<ReservationStatus, { label: string; color: string; bg: string }> = {

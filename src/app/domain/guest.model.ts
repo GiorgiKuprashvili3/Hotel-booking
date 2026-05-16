@@ -15,6 +15,7 @@ export interface Guest {
   isVip: boolean;
   loyaltyTier?: LoyaltyTier;
   loyaltyPoints: number;
+  loyaltyNumber?: string;    // e.g. "LUX001000"
   preferences: GuestPreferences;
   tags: string[];           // ['Allergic to nuts','Late checkout requested']
   notes?: string;
