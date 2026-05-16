@@ -4,12 +4,13 @@ import {
   IPropertyService, IRoomService, IReservationService, IGuestService,
   IStaffService, IHousekeepingService, IMaintenanceService, IConciergeService,
   IAnalyticsService, AnalyticsSnapshot,
-  ReservationQuery, GuestQuery,
+  ReservationQuery, GuestQuery, CheckInOptions, CheckOutOptions,
 } from '../../services/service-tokens';
 import {
   Property, Room, RoomType, Guest, Reservation, Staff,
   HousekeepingTask, MaintenanceRequest, ConciergeRequest,
-  RoomStatus, ReservationStatus, HousekeepingStatus, Folio,
+  RoomStatus, ReservationStatus, HousekeepingStatus, Folio, FolioItem, Payment,
+  PaymentMethod, RoomStatusHistory,
 } from '../../../domain';
 import { getSeedDataset, AnalyticsSnapshotRaw } from '../seed/seed-generator';
 
@@ -22,6 +23,12 @@ const LATENCY_MS = 180;
 function latency<T>(value: T): Observable<T> {
   return of(value).pipe(delay(LATENCY_MS));
 }
+
+/** Per-process room status history (mock-only — would be a DB table in real life). */
+const roomStatusHistory: RoomStatusHistory[] = [];
+
+/** Per-process folio overlays — initialised lazily, mutated by folio operations. */
+const folioStore = new Map<string, Folio>();
 
 /* ---------- Property ---------- */
 @Injectable({ providedIn: 'root' })
@@ -46,11 +53,24 @@ export class MockRoomService implements IRoomService {
   getById(id: string): Observable<Room | undefined> {
     return latency(getSeedDataset().rooms.find(r => r.id === id));
   }
-  updateStatus(id: string, status: RoomStatus): Observable<Room> {
+  updateStatus(id: string, status: RoomStatus, note?: string): Observable<Room> {
     const room = getSeedDataset().rooms.find(r => r.id === id);
     if (!room) return throwError(() => new Error('Room not found'));
-    room.status = status;
+    if (room.status !== status) {
+      roomStatusHistory.unshift({
+        id: `rsh-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        roomId: id,
+        from: room.status,
+        to: status,
+        at: new Date(),
+        note,
+      });
+      room.status = status;
+    }
     return latency(room);
+  }
+  listStatusHistory(roomId: string): Observable<RoomStatusHistory[]> {
+    return latency(roomStatusHistory.filter(h => h.roomId === roomId));
   }
 }
 
@@ -59,11 +79,23 @@ export class MockRoomService implements IRoomService {
 export class MockReservationService implements IReservationService {
   list(propertyId: string, params: ReservationQuery = {}): Observable<Reservation[]> {
     let items = getSeedDataset().reservations.filter(r => r.propertyId === propertyId);
-    if (params.status?.length) items = items.filter(r => params.status!.includes(r.status));
-    if (params.guestId)        items = items.filter(r => r.guestId === params.guestId);
+    if (params.status?.length)     items = items.filter(r => params.status!.includes(r.status));
+    if (params.guestId)            items = items.filter(r => r.guestId === params.guestId);
+    if (params.roomTypeId)         items = items.filter(r => r.roomTypeId === params.roomTypeId);
+    if (params.source?.length)     items = items.filter(r => params.source!.includes(r.source));
+    if (params.from)               items = items.filter(r => r.checkOut >= params.from!);
+    if (params.to)                 items = items.filter(r => r.checkIn  <= params.to!);
     if (params.search) {
       const q = params.search.toLowerCase();
-      items = items.filter(r => r.confirmationNumber.toLowerCase().includes(q));
+      const guests = getSeedDataset().guests;
+      items = items.filter(r => {
+        if (r.confirmationNumber.toLowerCase().includes(q)) return true;
+        const g = guests.find(x => x.id === r.guestId);
+        if (!g) return false;
+        return g.firstName.toLowerCase().includes(q) ||
+               g.lastName.toLowerCase().includes(q)  ||
+               g.email.toLowerCase().includes(q);
+      });
     }
     return latency(items);
   }
@@ -107,6 +139,12 @@ export class MockReservationService implements IReservationService {
     ds.reservations.push(created);
     return latency(created);
   }
+  update(id: string, patch: Partial<Reservation>): Observable<Reservation> {
+    const r = getSeedDataset().reservations.find(x => x.id === id);
+    if (!r) return throwError(() => new Error('Reservation not found'));
+    Object.assign(r, patch);
+    return latency(r);
+  }
   updateStatus(id: string, status: ReservationStatus): Observable<Reservation> {
     const r = getSeedDataset().reservations.find(x => x.id === id);
     if (!r) return throwError(() => new Error('Reservation not found'));
@@ -121,33 +159,159 @@ export class MockReservationService implements IReservationService {
     r.cancellationReason = reason;
     return latency(r);
   }
+  checkIn(id: string, opts: CheckInOptions): Observable<Reservation> {
+    const ds = getSeedDataset();
+    const r = ds.reservations.find(x => x.id === id);
+    if (!r) return throwError(() => new Error('Reservation not found'));
+    const room = ds.rooms.find(x => x.id === opts.roomId);
+    if (!room) return throwError(() => new Error('Room not found'));
+
+    r.roomId = opts.roomId;
+    r.status = ReservationStatus.CheckedIn;
+    if (opts.notes) r.internalNotes = (r.internalNotes ? r.internalNotes + '\n' : '') + opts.notes;
+
+    // Update room state
+    const prevStatus = room.status;
+    room.status = RoomStatus.Occupied;
+    if (prevStatus !== RoomStatus.Occupied) {
+      roomStatusHistory.unshift({
+        id: `rsh-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        roomId: room.id, from: prevStatus, to: RoomStatus.Occupied,
+        at: new Date(), note: `Check-in: ${r.confirmationNumber}`,
+      });
+    }
+
+    // Record payment if any
+    if (opts.paymentAmount && opts.paymentAmount > 0) {
+      r.totalPaid += opts.paymentAmount;
+      r.balance = Math.max(0, r.totalAmount - r.totalPaid);
+      this.appendPayment(r, opts.paymentAmount, opts.paymentMethod);
+    }
+    return latency(r);
+  }
+  checkOut(id: string, opts: CheckOutOptions): Observable<Reservation> {
+    const ds = getSeedDataset();
+    const r = ds.reservations.find(x => x.id === id);
+    if (!r) return throwError(() => new Error('Reservation not found'));
+    if (opts.paymentAmount && opts.paymentAmount > 0) {
+      r.totalPaid += opts.paymentAmount;
+      r.balance = Math.max(0, r.totalAmount - r.totalPaid);
+      this.appendPayment(r, opts.paymentAmount, opts.paymentMethod);
+    }
+    r.status = ReservationStatus.CheckedOut;
+    if (opts.notes) r.internalNotes = (r.internalNotes ? r.internalNotes + '\n' : '') + opts.notes;
+
+    if (r.roomId) {
+      const room = ds.rooms.find(x => x.id === r.roomId);
+      if (room && room.status !== RoomStatus.Cleaning) {
+        const prevStatus = room.status;
+        room.status = RoomStatus.Cleaning;
+        room.housekeepingStatus = HousekeepingStatus.Dirty;
+        roomStatusHistory.unshift({
+          id: `rsh-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          roomId: room.id, from: prevStatus, to: RoomStatus.Cleaning,
+          at: new Date(), note: `Check-out: ${r.confirmationNumber}`,
+        });
+      }
+    }
+
+    // Close folio
+    const f = folioStore.get(r.id);
+    if (f) {
+      f.isOpen = false;
+      f.closedAt = new Date();
+    }
+    return latency(r);
+  }
   getFolio(reservationId: string): Observable<Folio | undefined> {
+    return latency(this.ensureFolio(reservationId));
+  }
+  postFolioItem(reservationId: string, item: Partial<FolioItem>): Observable<Folio> {
+    const folio = this.ensureFolio(reservationId);
+    if (!folio) return throwError(() => new Error('Reservation not found'));
+    const newItem: FolioItem = {
+      id: `fi-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      date: item.date ?? new Date(),
+      description: item.description ?? '',
+      category: (item.category ?? 'misc') as FolioItem['category'],
+      quantity: item.quantity ?? 1,
+      unitPrice: item.unitPrice ?? 0,
+      amount: item.amount ?? (item.unitPrice ?? 0) * (item.quantity ?? 1),
+      postedBy: item.postedBy,
+    };
+    folio.items.push(newItem);
+    // Update reservation totals
     const r = getSeedDataset().reservations.find(x => x.id === reservationId);
-    if (!r) return latency(undefined);
-    // Build a synthetic folio on demand
+    if (r) {
+      r.totalExtras = (r.totalExtras ?? 0) + newItem.amount;
+      r.totalAmount = r.totalRoomCharge + r.totalTax + r.totalExtras;
+      r.balance = Math.max(0, r.totalAmount - r.totalPaid);
+    }
+    return latency(folio);
+  }
+  recordPayment(reservationId: string, payment: Partial<Payment>): Observable<Folio> {
+    const folio = this.ensureFolio(reservationId);
+    if (!folio) return throwError(() => new Error('Reservation not found'));
+    const r = getSeedDataset().reservations.find(x => x.id === reservationId);
+    if (!r) return throwError(() => new Error('Reservation not found'));
+    const p: Payment = {
+      id: `pay-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      reservationId,
+      date: payment.date ?? new Date(),
+      amount: payment.amount ?? 0,
+      method: (payment.method ?? PaymentMethod.Card),
+      reference: payment.reference,
+      receivedBy: payment.receivedBy,
+      notes: payment.notes,
+    };
+    folio.payments.push(p);
+    r.totalPaid += p.amount;
+    r.balance = Math.max(0, r.totalAmount - r.totalPaid);
+    return latency(folio);
+  }
+
+  /** Build a folio if first time; otherwise return cached one. */
+  private ensureFolio(reservationId: string): Folio | undefined {
+    if (folioStore.has(reservationId)) return folioStore.get(reservationId);
+    const r = getSeedDataset().reservations.find(x => x.id === reservationId);
+    if (!r) return undefined;
     const folio: Folio = {
       id: `folio-${r.id}`,
       reservationId: r.id,
-      isOpen: r.status === ReservationStatus.CheckedIn,
+      isOpen: r.status === ReservationStatus.CheckedIn || r.status === ReservationStatus.Confirmed,
+      closedAt: r.status === ReservationStatus.CheckedOut ? new Date() : undefined,
       items: Array.from({ length: r.nights }, (_, i) => ({
-        id: `fi-${r.id}-${i}`,
+        id: `fi-${r.id}-n${i}`,
         date: new Date(r.checkIn.getTime() + i * 86400000),
         description: `Room charge - night ${i + 1}`,
         category: 'room' as const,
         quantity: 1,
-        unitPrice: r.totalRoomCharge / r.nights,
-        amount: r.totalRoomCharge / r.nights,
+        unitPrice: r.totalRoomCharge / Math.max(1, r.nights),
+        amount: r.totalRoomCharge / Math.max(1, r.nights),
       })),
       payments: r.totalPaid > 0 ? [{
-        id: `pay-${r.id}`,
+        id: `pay-${r.id}-init`,
         reservationId: r.id,
         date: r.createdAt,
         amount: r.totalPaid,
-        method: 'card' as any,
+        method: PaymentMethod.Card,
         reference: '**** 4242',
       }] : [],
     };
-    return latency(folio);
+    folioStore.set(reservationId, folio);
+    return folio;
+  }
+
+  private appendPayment(r: Reservation, amount: number, method?: string): void {
+    const folio = this.ensureFolio(r.id);
+    if (!folio) return;
+    folio.payments.push({
+      id: `pay-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      reservationId: r.id,
+      date: new Date(),
+      amount,
+      method: (method as PaymentMethod) ?? PaymentMethod.Card,
+    });
   }
 }
 
@@ -204,6 +368,22 @@ export class MockGuestService implements IGuestService {
     };
     getSeedDataset().guests.push(guest);
     return latency(guest);
+  }
+  update(id: string, patch: Partial<Guest>): Observable<Guest> {
+    const g = getSeedDataset().guests.find(x => x.id === id);
+    if (!g) return throwError(() => new Error('Guest not found'));
+    // Preserve preferences nesting if partial preferences provided
+    if (patch.preferences) {
+      patch.preferences = { ...g.preferences, ...patch.preferences };
+    }
+    Object.assign(g, patch);
+    return latency(g);
+  }
+  getStays(guestId: string): Observable<Reservation[]> {
+    const items = getSeedDataset().reservations
+      .filter(r => r.guestId === guestId)
+      .sort((a, b) => b.checkIn.getTime() - a.checkIn.getTime());
+    return latency(items);
   }
 }
 

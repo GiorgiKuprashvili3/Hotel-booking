@@ -46,6 +46,13 @@ export const APP_ROUTES: Routes = [
         title: 'Reservations · LuxStay',
       },
       {
+        path: 'reservations/:id',
+        canActivate: [roleGuard],
+        data: { roles: [Role.Admin, Role.Manager, Role.Receptionist] },
+        loadComponent: () => import('./features/reservations/reservation-detail.page').then(m => m.ReservationDetailPageComponent),
+        title: 'Reservation · LuxStay',
+      },
+      {
         path: 'rooms',
         canActivate: [roleGuard],
         data: { roles: [Role.Admin, Role.Manager, Role.Receptionist, Role.Housekeeper] },
@@ -58,6 +65,13 @@ export const APP_ROUTES: Routes = [
         data: { roles: [Role.Admin, Role.Manager, Role.Receptionist] },
         loadComponent: () => import('./features/guests.page').then(m => m.GuestsPageComponent),
         title: 'Guests · LuxStay',
+      },
+      {
+        path: 'guests/:id',
+        canActivate: [roleGuard],
+        data: { roles: [Role.Admin, Role.Manager, Role.Receptionist] },
+        loadComponent: () => import('./features/guests/guest-detail.page').then(m => m.GuestDetailPageComponent),
+        title: 'Guest · LuxStay',
       },
       {
         path: 'housekeeping',

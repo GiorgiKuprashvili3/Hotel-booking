@@ -3,7 +3,8 @@ import { Observable } from 'rxjs';
 import {
   Guest, Property, Reservation, Room, RoomType,
   HousekeepingTask, MaintenanceRequest, ConciergeRequest,
-  Staff, ReservationStatus, RoomStatus, Folio,
+  Staff, ReservationStatus, RoomStatus, Folio, FolioItem, Payment,
+  RoomStatusHistory,
 } from '../../domain';
 
 /* ============================================================
@@ -21,7 +22,8 @@ export interface IRoomService {
   list(propertyId: string): Observable<Room[]>;
   listTypes(propertyId: string): Observable<RoomType[]>;
   getById(id: string): Observable<Room | undefined>;
-  updateStatus(id: string, status: RoomStatus): Observable<Room>;
+  updateStatus(id: string, status: RoomStatus, note?: string): Observable<Room>;
+  listStatusHistory(roomId: string): Observable<RoomStatusHistory[]>;
 }
 
 export interface IReservationService {
@@ -29,14 +31,37 @@ export interface IReservationService {
   getById(id: string): Observable<Reservation | undefined>;
   getByDateRange(propertyId: string, from: Date, to: Date): Observable<Reservation[]>;
   create(data: Partial<Reservation>): Observable<Reservation>;
+  update(id: string, patch: Partial<Reservation>): Observable<Reservation>;
   updateStatus(id: string, status: ReservationStatus): Observable<Reservation>;
   cancel(id: string, reason: string): Observable<Reservation>;
+  checkIn(id: string, opts: CheckInOptions): Observable<Reservation>;
+  checkOut(id: string, opts: CheckOutOptions): Observable<Reservation>;
   getFolio(reservationId: string): Observable<Folio | undefined>;
+  postFolioItem(reservationId: string, item: Partial<FolioItem>): Observable<Folio>;
+  recordPayment(reservationId: string, payment: Partial<Payment>): Observable<Folio>;
+}
+
+export interface CheckInOptions {
+  roomId: string;
+  idVerified: boolean;
+  keyCardsIssued: number;
+  paymentAmount?: number;
+  paymentMethod?: string;
+  notes?: string;
+}
+
+export interface CheckOutOptions {
+  paymentAmount?: number;
+  paymentMethod?: string;
+  emailReceipt?: boolean;
+  notes?: string;
 }
 
 export interface ReservationQuery {
   status?: ReservationStatus[];
   guestId?: string;
+  roomTypeId?: string;
+  source?: string[];
   search?: string;
   from?: Date;
   to?: Date;
@@ -47,6 +72,8 @@ export interface IGuestService {
   getById(id: string): Observable<Guest | undefined>;
   search(query: string): Observable<Guest[]>;
   create(data: Partial<Guest>): Observable<Guest>;
+  update(id: string, patch: Partial<Guest>): Observable<Guest>;
+  getStays(guestId: string): Observable<Reservation[]>;
 }
 
 export interface GuestQuery {
