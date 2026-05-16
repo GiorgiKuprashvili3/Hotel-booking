@@ -30,14 +30,21 @@ export interface Room {
 
 export interface RatePlan {
   id: string;
-  propertyId: string;
-  roomTypeId: string;
-  name: string;            // 'Best Available Rate', 'Non-refundable'
-  multiplier: number;      // 1.0 base, 0.85 discounted
-  minStay: number;         // nights
+  name: string;
+  code: string;              // 'BAR', 'BB', 'NR'
+  description?: string;
+  // legacy fields kept for backward compat
+  propertyId?: string;
+  roomTypeId?: string;
+  multiplier?: number;
+  minStay?: number;
   maxStay?: number;
-  refundable: boolean;
-  includesBreakfast: boolean;
+  refundable?: boolean;
+  isRefundable: boolean;
+  includesBreakfast?: boolean;
+  cancellationHours: number;  // free cancellation up to N hours before arrival
+  depositPct: number;         // 0-100
+  isActive: boolean;
 }
 
 /** A log entry every time a room's status changes — surfaced in the room drawer. */

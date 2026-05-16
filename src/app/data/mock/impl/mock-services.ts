@@ -5,13 +5,19 @@ import {
   IStaffService, IHousekeepingService, IMaintenanceService, IConciergeService,
   IAnalyticsService, AnalyticsSnapshot,
   ReservationQuery, GuestQuery, CheckInOptions, CheckOutOptions,
+  ILoyaltyService, LoyaltyMemberQuery,
+  IAuditService, AuditQuery,
+  IRatePlanService, ISettingsService,
+  InviteStaffPayload,
 } from '../../services/service-tokens';
 import {
   Property, Room, RoomType, Guest, Reservation, Staff,
   HousekeepingTask, MaintenanceRequest, ConciergeRequest,
   RoomStatus, ReservationStatus, HousekeepingStatus, MaintenanceStatus, Folio, FolioItem, Payment,
-  PaymentMethod, RoomStatusHistory,
+  PaymentMethod, RoomStatusHistory, AuditLog, LoyaltyProgram, LoyaltyPromotion,
+  LoyaltyPointsLedgerEntry, RatePlan, PropertySettings,
 } from '../../../domain';
+import { AuditAction, AuditEntityType, LoyaltyTier, Role } from '../../../domain/enums';
 import { getSeedDataset, AnalyticsSnapshotRaw } from '../seed/seed-generator';
 
 /* ============================================================
@@ -29,6 +35,9 @@ const roomStatusHistory: RoomStatusHistory[] = [];
 
 /** Per-process folio overlays — initialised lazily, mutated by folio operations. */
 const folioStore = new Map<string, Folio>();
+
+/** Per-process points ledger — keyed by guestId. */
+const pointsLedger = new Map<string, LoyaltyPointsLedgerEntry[]>();
 
 /* ---------- Property ---------- */
 @Injectable({ providedIn: 'root' })
@@ -170,7 +179,6 @@ export class MockReservationService implements IReservationService {
     r.status = ReservationStatus.CheckedIn;
     if (opts.notes) r.internalNotes = (r.internalNotes ? r.internalNotes + '\n' : '') + opts.notes;
 
-    // Update room state
     const prevStatus = room.status;
     room.status = RoomStatus.Occupied;
     if (prevStatus !== RoomStatus.Occupied) {
@@ -181,7 +189,6 @@ export class MockReservationService implements IReservationService {
       });
     }
 
-    // Record payment if any
     if (opts.paymentAmount && opts.paymentAmount > 0) {
       r.totalPaid += opts.paymentAmount;
       r.balance = Math.max(0, r.totalAmount - r.totalPaid);
@@ -215,12 +222,21 @@ export class MockReservationService implements IReservationService {
       }
     }
 
-    // Close folio
     const f = folioStore.get(r.id);
-    if (f) {
-      f.isOpen = false;
-      f.closedAt = new Date();
+    if (f) { f.isOpen = false; f.closedAt = new Date(); }
+
+    // Award loyalty points on checkout
+    const guest = ds.guests.find(g => g.id === r.guestId);
+    if (guest) {
+      const program = ds.loyaltyProgram;
+      const tierCfg = program.tiers.find(t => t.id === guest.loyaltyTier) ?? program.tiers[0];
+      const earned = Math.floor(r.totalAmount * (tierCfg?.pointsPerGel ?? 1));
+      if (earned > 0) {
+        guest.loyaltyPoints = (guest.loyaltyPoints ?? 0) + earned;
+        this.addLedgerEntry(guest.id, r.id, 'earn', earned, guest.loyaltyPoints, `Points earned for stay ${r.confirmationNumber}`);
+      }
     }
+
     return latency(r);
   }
   getFolio(reservationId: string): Observable<Folio | undefined> {
@@ -240,7 +256,6 @@ export class MockReservationService implements IReservationService {
       postedBy: item.postedBy,
     };
     folio.items.push(newItem);
-    // Update reservation totals
     const r = getSeedDataset().reservations.find(x => x.id === reservationId);
     if (r) {
       r.totalExtras = (r.totalExtras ?? 0) + newItem.amount;
@@ -270,7 +285,6 @@ export class MockReservationService implements IReservationService {
     return latency(folio);
   }
 
-  /** Build a folio if first time; otherwise return cached one. */
   private ensureFolio(reservationId: string): Folio | undefined {
     if (folioStore.has(reservationId)) return folioStore.get(reservationId);
     const r = getSeedDataset().reservations.find(x => x.id === reservationId);
@@ -311,6 +325,20 @@ export class MockReservationService implements IReservationService {
       date: new Date(),
       amount,
       method: (method as PaymentMethod) ?? PaymentMethod.Card,
+    });
+  }
+
+  private addLedgerEntry(
+    guestId: string, reservationId: string | undefined,
+    type: LoyaltyPointsLedgerEntry['type'], points: number,
+    balanceAfter: number, description: string,
+  ): void {
+    if (!pointsLedger.has(guestId)) pointsLedger.set(guestId, []);
+    pointsLedger.get(guestId)!.unshift({
+      id: `ledger-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      guestId, reservationId,
+      type, points, balanceAfter, description,
+      createdAt: new Date(),
     });
   }
 }
@@ -372,7 +400,6 @@ export class MockGuestService implements IGuestService {
   update(id: string, patch: Partial<Guest>): Observable<Guest> {
     const g = getSeedDataset().guests.find(x => x.id === id);
     if (!g) return throwError(() => new Error('Guest not found'));
-    // Preserve preferences nesting if partial preferences provided
     if (patch.preferences) {
       patch.preferences = { ...g.preferences, ...patch.preferences };
     }
@@ -397,6 +424,48 @@ export class MockStaffService implements IStaffService {
   }
   getById(id: string): Observable<Staff | undefined> {
     return latency(getSeedDataset().staff.find(s => s.id === id));
+  }
+  invite(data: InviteStaffPayload): Observable<Staff> {
+    const ds = getSeedDataset();
+    const newStaff: Staff = {
+      id:           `staff-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      firstName:    data.firstName,
+      lastName:     data.lastName,
+      email:        data.email,
+      phone:        data.phone,
+      role:         data.role as Role,
+      propertyIds:  data.propertyIds,
+      isActive:     true,
+      hiredAt:      new Date(),
+      inviteStatus: 'pending',
+      invitedAt:    new Date(),
+    };
+    ds.staff.push(newStaff);
+
+    // Append to audit log
+    ds.auditLog.unshift({
+      id: `audit-${Date.now()}`,
+      entityType: AuditEntityType.Staff,
+      entityId: newStaff.id,
+      action: AuditAction.InviteSent,
+      userId: 'current-user',
+      details: { email: data.email, role: data.role },
+      timestamp: new Date(),
+    });
+
+    return latency(newStaff);
+  }
+  update(id: string, patch: Partial<Staff>): Observable<Staff> {
+    const s = getSeedDataset().staff.find(x => x.id === id);
+    if (!s) return throwError(() => new Error('Staff not found'));
+    Object.assign(s, patch);
+    return latency(s);
+  }
+  deactivate(id: string): Observable<Staff> {
+    const s = getSeedDataset().staff.find(x => x.id === id);
+    if (!s) return throwError(() => new Error('Staff not found'));
+    s.isActive = false;
+    return latency(s);
   }
 }
 
@@ -490,11 +559,36 @@ export class MockConciergeService implements IConciergeService {
   list(propertyId: string): Observable<ConciergeRequest[]> {
     return latency(getSeedDataset().concierge.filter(c => c.propertyId === propertyId));
   }
-  updateStatus(id: string, status: string): Observable<ConciergeRequest> {
+  create(data: Partial<ConciergeRequest>): Observable<ConciergeRequest> {
+    const ds = getSeedDataset();
+    const item: ConciergeRequest = {
+      id:            `con-new-${ds.concierge.length + 1}`,
+      propertyId:    data.propertyId!,
+      reservationId: data.reservationId!,
+      guestId:       data.guestId!,
+      roomId:        data.roomId,
+      type:          data.type ?? ('other' as any),
+      status:        'new' as any,
+      details:       data.details ?? '',
+      scheduledFor:  data.scheduledFor,
+      requestedAt:   new Date(),
+      assignedTo:    data.assignedTo,
+    };
+    ds.concierge.push(item);
+    return latency(item);
+  }
+  updateStatus(id: string, status: string, assignedTo?: string): Observable<ConciergeRequest> {
     const c = getSeedDataset().concierge.find(x => x.id === id);
     if (!c) return throwError(() => new Error('Request not found'));
     c.status = status as any;
+    if (assignedTo !== undefined) c.assignedTo = assignedTo;
     if (status === 'completed') c.completedAt = new Date();
+    return latency(c);
+  }
+  update(id: string, patch: Partial<ConciergeRequest>): Observable<ConciergeRequest> {
+    const c = getSeedDataset().concierge.find(x => x.id === id);
+    if (!c) return throwError(() => new Error('Request not found'));
+    Object.assign(c, patch);
     return latency(c);
   }
 }
@@ -514,5 +608,210 @@ export class MockAnalyticsService implements IAnalyticsService {
       getSeedDataset().analyticsSnapshots
         .find(s => s.propertyId === propertyId && s.date === date),
     );
+  }
+}
+
+/* ---------- Loyalty ---------- */
+@Injectable({ providedIn: 'root' })
+export class MockLoyaltyService implements ILoyaltyService {
+  getProgram(): Observable<LoyaltyProgram> {
+    return latency(getSeedDataset().loyaltyProgram);
+  }
+
+  listMembers(params: LoyaltyMemberQuery = {}): Observable<Guest[]> {
+    let guests = getSeedDataset().guests.filter(g => g.loyaltyTier !== undefined);
+    if (params.tier) guests = guests.filter(g => g.loyaltyTier === params.tier);
+    if (params.search) {
+      const q = params.search.toLowerCase();
+      guests = guests.filter(g =>
+        g.firstName.toLowerCase().includes(q) ||
+        g.lastName.toLowerCase().includes(q) ||
+        g.email.toLowerCase().includes(q),
+      );
+    }
+    return latency(guests);
+  }
+
+  getPointsHistory(guestId: string): Observable<LoyaltyPointsLedgerEntry[]> {
+    // Return any existing ledger entries + synthesise a history from reservations
+    const existing = pointsLedger.get(guestId) ?? [];
+    if (existing.length > 0) return latency(existing);
+
+    const guest = getSeedDataset().guests.find(g => g.id === guestId);
+    if (!guest) return latency([]);
+
+    const stays = getSeedDataset().reservations
+      .filter(r => r.guestId === guestId && r.status === 'checked_out')
+      .sort((a, b) => a.checkOut.getTime() - b.checkOut.getTime());
+
+    const entries: LoyaltyPointsLedgerEntry[] = [];
+    let balance = 0;
+    stays.forEach(r => {
+      const earned = Math.floor(r.totalAmount * 1.5);
+      balance += earned;
+      entries.push({
+        id: `ledger-${r.id}`,
+        guestId,
+        reservationId: r.id,
+        type: 'earn',
+        points: earned,
+        balanceAfter: balance,
+        description: `Points earned for stay ${r.confirmationNumber}`,
+        createdAt: r.checkOut,
+      });
+    });
+
+    // If current balance > accumulated stays, add a historical adjustment entry
+    const diff = (guest.loyaltyPoints ?? 0) - balance;
+    if (diff > 0) {
+      balance += diff;
+      entries.unshift({
+        id: `ledger-adj-${guestId}`,
+        guestId,
+        type: 'adjustment',
+        points: diff,
+        balanceAfter: balance,
+        description: 'Historical points balance adjustment',
+        createdAt: guest.createdAt,
+      });
+    }
+
+    return latency(entries.reverse());
+  }
+
+  adjustPoints(guestId: string, points: number, description: string, staffId: string): Observable<Guest> {
+    const g = getSeedDataset().guests.find(x => x.id === guestId);
+    if (!g) return throwError(() => new Error('Guest not found'));
+    g.loyaltyPoints = Math.max(0, (g.loyaltyPoints ?? 0) + points);
+
+    if (!pointsLedger.has(guestId)) pointsLedger.set(guestId, []);
+    pointsLedger.get(guestId)!.unshift({
+      id: `ledger-adj-${Date.now()}`,
+      guestId,
+      type: points >= 0 ? 'adjustment' : 'redeem',
+      points,
+      balanceAfter: g.loyaltyPoints,
+      description,
+      createdAt: new Date(),
+      staffId,
+    });
+
+    // Recalculate tier
+    const program = getSeedDataset().loyaltyProgram;
+    const sortedTiers = [...program.tiers].sort((a, b) => b.minPoints - a.minPoints);
+    const newTier = sortedTiers.find(t => g.loyaltyPoints >= t.minPoints);
+    if (newTier) g.loyaltyTier = newTier.id as LoyaltyTier;
+
+    return latency(g);
+  }
+
+  listPromotions(): Observable<LoyaltyPromotion[]> {
+    return latency(getSeedDataset().loyaltyPromotions);
+  }
+
+  createPromotion(data: Partial<LoyaltyPromotion>): Observable<LoyaltyPromotion> {
+    const ds = getSeedDataset();
+    const promo: LoyaltyPromotion = {
+      id:           `promo-${Date.now()}`,
+      name:         data.name ?? '',
+      description:  data.description ?? '',
+      multiplier:   data.multiplier ?? 2,
+      targetTiers:  data.targetTiers ?? [],
+      startsAt:     data.startsAt ?? new Date(),
+      endsAt:       data.endsAt ?? new Date(Date.now() + 7 * 86400_000),
+      isActive:     data.isActive ?? true,
+      createdBy:    data.createdBy ?? 'current-user',
+    };
+    ds.loyaltyPromotions.push(promo);
+    return latency(promo);
+  }
+
+  updatePromotion(id: string, patch: Partial<LoyaltyPromotion>): Observable<LoyaltyPromotion> {
+    const ds = getSeedDataset();
+    const promo = ds.loyaltyPromotions.find(p => p.id === id);
+    if (!promo) return throwError(() => new Error('Promotion not found'));
+    Object.assign(promo, patch);
+    return latency(promo);
+  }
+}
+
+/* ---------- Audit ---------- */
+@Injectable({ providedIn: 'root' })
+export class MockAuditService implements IAuditService {
+  list(params: AuditQuery = {}): Observable<AuditLog[]> {
+    let items = [...getSeedDataset().auditLog];
+    if (params.entityType) items = items.filter(a => a.entityType === params.entityType);
+    if (params.entityId)   items = items.filter(a => a.entityId === params.entityId);
+    if (params.userId)     items = items.filter(a => a.userId === params.userId);
+    if (params.action)     items = items.filter(a => a.action === params.action);
+    if (params.from)       items = items.filter(a => a.timestamp >= params.from!);
+    if (params.to)         items = items.filter(a => a.timestamp <= params.to!);
+    items = items.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    if (params.limit)      items = items.slice(0, params.limit);
+    return latency(items);
+  }
+
+  log(entry: Omit<AuditLog, 'id' | 'timestamp'>): Observable<AuditLog> {
+    const full: AuditLog = {
+      ...entry,
+      id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: new Date(),
+    };
+    getSeedDataset().auditLog.unshift(full);
+    return latency(full);
+  }
+}
+
+/* ---------- Rate Plans ---------- */
+@Injectable({ providedIn: 'root' })
+export class MockRatePlanService implements IRatePlanService {
+  list(): Observable<RatePlan[]> {
+    return latency(getSeedDataset().ratePlans);
+  }
+  create(data: Partial<RatePlan>): Observable<RatePlan> {
+    const ds = getSeedDataset();
+    const plan: RatePlan = {
+      id:                `rp-${Date.now()}`,
+      name:              data.name ?? '',
+      code:              data.code ?? '',
+      description:       data.description,
+      isRefundable:      data.isRefundable ?? true,
+      cancellationHours: data.cancellationHours ?? 24,
+      depositPct:        data.depositPct ?? 0,
+      isActive:          data.isActive ?? true,
+    };
+    ds.ratePlans.push(plan);
+    return latency(plan);
+  }
+  update(id: string, patch: Partial<RatePlan>): Observable<RatePlan> {
+    const plan = getSeedDataset().ratePlans.find(r => r.id === id);
+    if (!plan) return throwError(() => new Error('Rate plan not found'));
+    Object.assign(plan, patch);
+    return latency(plan);
+  }
+  deactivate(id: string): Observable<RatePlan> {
+    const plan = getSeedDataset().ratePlans.find(r => r.id === id);
+    if (!plan) return throwError(() => new Error('Rate plan not found'));
+    plan.isActive = false;
+    return latency(plan);
+  }
+}
+
+/* ---------- Settings ---------- */
+@Injectable({ providedIn: 'root' })
+export class MockSettingsService implements ISettingsService {
+  get(): Observable<PropertySettings> {
+    return latency(getSeedDataset().settings);
+  }
+  update(patch: Partial<PropertySettings>): Observable<PropertySettings> {
+    const s = getSeedDataset().settings;
+    Object.assign(s, patch);
+    if (patch.notifications) {
+      s.notifications = { ...s.notifications, ...patch.notifications };
+    }
+    if (patch.dashboard) {
+      s.dashboard = { ...s.dashboard, ...patch.dashboard };
+    }
+    return latency(s);
   }
 }

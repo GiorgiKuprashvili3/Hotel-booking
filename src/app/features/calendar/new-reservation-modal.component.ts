@@ -833,7 +833,7 @@ export class NewReservationModalComponent implements OnInit {
   );
 
   nightlyRate(rp: RatePlan): number {
-    return (this.roomType()?.basePrice ?? 0) * rp.multiplier;
+    return (this.roomType()?.basePrice ?? 0) * (rp.multiplier ?? 1);
   }
 
   totalRoomCharge = computed(() => {

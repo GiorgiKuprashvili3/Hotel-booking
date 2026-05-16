@@ -262,62 +262,239 @@ export function generateAuditLog(): AuditLog[] {
     }));
   }
 
-  // Synthesise a rich audit log from existing seed data if seed is sparse
-  const reservations = (RAW.reservations as any[]).slice(0, 30);
+  // Synthesise a rich audit log covering all entity types and actions
+  const reservations   = (RAW.reservations   as any[]).slice(0, 40);
+  const guests         = (RAW.guests         as any[]).slice(0, 15);
+  const staffList      = (RAW.staff          as any[]);
+  const rooms          = (RAW.rooms          as any[]).slice(0, 10);
+  const maintenance    = (RAW.maintenance    as any[]).slice(0, 10);
+  const concierge      = (RAW.concierge      as any[]).slice(0, 10);
+  const housekeeping   = (RAW.housekeepingTasks as any[]).slice(0, 10);
+
+  const staffIds  = staffList.map((s: any) => s.id);
+  const ipPool    = ['192.168.1.12','192.168.1.34','10.0.0.5','10.0.1.8','172.16.0.2'];
   const entries: AuditLog[] = [];
   let idx = 1;
 
+  function uid(): string { return staffIds[idx % staffIds.length] ?? 'staff-1'; }
+  function ip(): string  { return ipPool[idx % ipPool.length]; }
+  function ago(ms: number): Date { return new Date(Date.now() - ms); }
+
+  // ── Reservations ──────────────────────────────────────────────
   reservations.forEach(r => {
     entries.push({
-      id: `audit-synth-${idx++}`,
-      entityType: AuditEntityType.Reservation,
-      entityId: r.id,
-      action: AuditAction.Created,
-      userId: 'staff-3',
-      details: { confirmationNumber: r.confirmationNumber, source: r.source },
+      id: `audit-synth-${idx++}`, entityType: AuditEntityType.Reservation,
+      entityId: r.id, action: AuditAction.Created, userId: uid(), ipAddress: ip(),
+      details: { confirmationNumber: r.confirmationNumber, source: r.source, nights: r.nights },
       timestamp: d(r.createdAt),
     });
     if (r.status === 'checked_in' || r.status === 'checked_out') {
       entries.push({
-        id: `audit-synth-${idx++}`,
-        entityType: AuditEntityType.Reservation,
-        entityId: r.id,
-        action: AuditAction.CheckedIn,
-        userId: 'staff-3',
-        details: { roomId: r.roomId },
-        timestamp: new Date(d(r.checkIn).getTime() + 3600_000),
+        id: `audit-synth-${idx++}`, entityType: AuditEntityType.Reservation,
+        entityId: r.id, action: AuditAction.CheckedIn, userId: uid(), ipAddress: ip(),
+        details: { roomId: r.roomId, keyCardsIssued: 2 },
+        timestamp: new Date(d(r.checkIn).getTime() + 3_600_000),
       });
     }
     if (r.status === 'checked_out') {
       entries.push({
-        id: `audit-synth-${idx++}`,
-        entityType: AuditEntityType.Reservation,
-        entityId: r.id,
-        action: AuditAction.CheckedOut,
-        userId: 'staff-2',
-        details: {},
+        id: `audit-synth-${idx++}`, entityType: AuditEntityType.Reservation,
+        entityId: r.id, action: AuditAction.CheckedOut, userId: uid(), ipAddress: ip(),
+        details: { totalPaid: r.totalPaid, balance: r.balance },
         timestamp: d(r.checkOut),
+      });
+      entries.push({
+        id: `audit-synth-${idx++}`, entityType: AuditEntityType.Loyalty,
+        entityId: r.guestId, action: AuditAction.PointsAdjusted, userId: uid(), ipAddress: ip(),
+        details: { points: Math.floor((r.totalAmount ?? 200) * 1.5), reason: `Stay ${r.confirmationNumber}` },
+        timestamp: new Date(d(r.checkOut).getTime() + 60_000),
+      });
+    }
+    if (r.status === 'cancelled') {
+      entries.push({
+        id: `audit-synth-${idx++}`, entityType: AuditEntityType.Reservation,
+        entityId: r.id, action: AuditAction.Cancelled, userId: uid(), ipAddress: ip(),
+        details: { reason: r.cancellationReason ?? 'Guest request' },
+        timestamp: dOpt(r.cancelledAt) ?? ago(86400_000 * 2),
       });
     }
   });
 
-  // Add staff login events
-  ['staff-1', 'staff-2', 'staff-3'].forEach(sid => {
+  // ── Guest updates ─────────────────────────────────────────────
+  guests.forEach(g => {
     entries.push({
-      id: `audit-synth-${idx++}`,
-      entityType: AuditEntityType.Staff,
-      entityId: sid,
-      action: AuditAction.Login,
-      userId: sid,
-      details: { ip: '192.168.1.' + Math.floor(Math.random() * 50 + 10) },
-      timestamp: new Date(Date.now() - Math.random() * 86400_000 * 3),
+      id: `audit-synth-${idx++}`, entityType: AuditEntityType.Guest,
+      entityId: g.id, action: AuditAction.Created, userId: uid(), ipAddress: ip(),
+      details: { name: `${g.firstName} ${g.lastName}`, nationality: g.nationality },
+      timestamp: d(g.createdAt),
     });
+    if (g.isVip) {
+      entries.push({
+        id: `audit-synth-${idx++}`, entityType: AuditEntityType.Guest,
+        entityId: g.id, action: AuditAction.Updated, userId: uid(), ipAddress: ip(),
+        details: { field: 'isVip', from: false, to: true },
+        timestamp: new Date(d(g.createdAt).getTime() + 86400_000 * 3),
+      });
+    }
+  });
+
+  // ── Room status changes ───────────────────────────────────────
+  rooms.forEach(r => {
+    entries.push({
+      id: `audit-synth-${idx++}`, entityType: AuditEntityType.Room,
+      entityId: r.id, action: AuditAction.StatusChanged, userId: uid(), ipAddress: ip(),
+      details: { room: r.number, from: 'available', to: r.status },
+      timestamp: ago(86400_000 * Math.floor(Math.random() * 7 + 1)),
+    });
+  });
+
+  // ── Maintenance ───────────────────────────────────────────────
+  maintenance.forEach(m => {
+    entries.push({
+      id: `audit-synth-${idx++}`, entityType: AuditEntityType.Maintenance,
+      entityId: m.id, action: AuditAction.Created, userId: uid(), ipAddress: ip(),
+      details: { title: m.title, priority: m.priority, category: m.category },
+      timestamp: d(m.reportedAt),
+    });
+    if (m.status !== 'open') {
+      entries.push({
+        id: `audit-synth-${idx++}`, entityType: AuditEntityType.Maintenance,
+        entityId: m.id, action: AuditAction.StatusChanged, userId: uid(), ipAddress: ip(),
+        details: { from: 'open', to: m.status },
+        timestamp: dOpt(m.resolvedAt) ?? ago(86400_000),
+      });
+    }
+  });
+
+  // ── Concierge ─────────────────────────────────────────────────
+  concierge.forEach(c => {
+    entries.push({
+      id: `audit-synth-${idx++}`, entityType: AuditEntityType.Concierge,
+      entityId: c.id, action: AuditAction.Created, userId: uid(), ipAddress: ip(),
+      details: { type: c.type, guestId: c.guestId },
+      timestamp: d(c.requestedAt ?? c.createdAt),
+    });
+    if (c.status === 'completed') {
+      entries.push({
+        id: `audit-synth-${idx++}`, entityType: AuditEntityType.Concierge,
+        entityId: c.id, action: AuditAction.StatusChanged, userId: uid(), ipAddress: ip(),
+        details: { from: 'in_progress', to: 'completed' },
+        timestamp: dOpt(c.completedAt) ?? ago(3_600_000),
+      });
+    }
+  });
+
+  // ── Housekeeping ──────────────────────────────────────────────
+  housekeeping.forEach(h => {
+    if (h.completedAt) {
+      entries.push({
+        id: `audit-synth-${idx++}`, entityType: AuditEntityType.Housekeeping,
+        entityId: h.id, action: AuditAction.StatusChanged, userId: h.assignedTo ?? uid(),
+        ipAddress: ip(),
+        details: { roomId: h.roomId, from: 'in_progress', to: 'clean', durationMinutes: h.durationMinutes },
+        timestamp: d(h.completedAt),
+      });
+    }
+  });
+
+  // ── Staff logins ──────────────────────────────────────────────
+  staffList.forEach((s: any, i: number) => {
+    // login today / yesterday
+    entries.push({
+      id: `audit-synth-${idx++}`, entityType: AuditEntityType.Staff,
+      entityId: s.id, action: AuditAction.Login, userId: s.id, ipAddress: ip(),
+      details: { browser: 'Chrome 124' },
+      timestamp: ago((i % 3) * 3_600_000 + Math.random() * 3_600_000),
+    });
+    if (i % 4 === 0) {
+      entries.push({
+        id: `audit-synth-${idx++}`, entityType: AuditEntityType.Staff,
+        entityId: s.id, action: AuditAction.Logout, userId: s.id, ipAddress: ip(),
+        details: { sessionDurationMin: Math.floor(Math.random() * 480 + 30) },
+        timestamp: ago((i % 3) * 3_600_000 - 1_800_000),
+      });
+    }
+  });
+
+  // ── Settings change ───────────────────────────────────────────
+  entries.push({
+    id: `audit-synth-${idx++}`, entityType: AuditEntityType.Setting,
+    entityId: 'prop-1', action: AuditAction.Updated, userId: staffIds[0] ?? 'staff-1',
+    ipAddress: ip(),
+    details: { field: 'checkInTime', from: '14:00', to: '15:00' },
+    timestamp: ago(86400_000 * 5),
   });
 
   return entries.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 }
 
-/* ── Loyalty Program ─────────────────────────────────────────── */
+/* ── Loyalty Promotions ──────────────────────────────────────── */
+
+export function generateLoyaltyPromotions(): LoyaltyPromotion[] {
+  const raw = (RAW as any).loyaltyPromotions ?? [];
+  if (raw.length > 0) {
+    return raw.map((p: any) => ({
+      id:          p.id,
+      name:        p.name,
+      description: p.description ?? '',
+      multiplier:  p.multiplier ?? 2,
+      targetTiers: (p.targetTiers ?? []) as LoyaltyTier[],
+      startsAt:    d(p.startsAt),
+      endsAt:      d(p.endsAt),
+      isActive:    p.isActive ?? true,
+      createdBy:   p.createdBy ?? 'staff-1',
+    }));
+  }
+  // Fallback: rich built-in promotions so the tab is never empty
+  const now = Date.now();
+  const day = 86_400_000;
+  return [
+    {
+      id: 'promo-1',
+      name: 'Double Points Weekend',
+      description: 'Earn 2× LuxPoints on all stays booked Friday–Sunday.',
+      multiplier: 2,
+      targetTiers: [] as LoyaltyTier[],
+      startsAt: new Date(now - day * 2),
+      endsAt:   new Date(now + day * 5),
+      isActive: true,
+      createdBy: 'staff-1',
+    },
+    {
+      id: 'promo-2',
+      name: 'Platinum & Diamond Boost',
+      description: 'Our top-tier members earn 3× points throughout Q2.',
+      multiplier: 3,
+      targetTiers: [LoyaltyTier.Platinum, LoyaltyTier.Diamond],
+      startsAt: new Date(now - day * 10),
+      endsAt:   new Date(now + day * 80),
+      isActive: true,
+      createdBy: 'staff-1',
+    },
+    {
+      id: 'promo-3',
+      name: 'New Member Welcome Bonus',
+      description: 'First-time members earn 2× points on their inaugural stay.',
+      multiplier: 2,
+      targetTiers: [LoyaltyTier.Bronze],
+      startsAt: new Date(now - day * 30),
+      endsAt:   new Date(now + day * 335),
+      isActive: true,
+      createdBy: 'staff-2',
+    },
+    {
+      id: 'promo-4',
+      name: 'Summer Splash',
+      description: '1.5× points on all spa and F&B charges during summer.',
+      multiplier: 1.5,
+      targetTiers: [] as LoyaltyTier[],
+      startsAt: new Date(now + day * 20),
+      endsAt:   new Date(now + day * 110),
+      isActive: false,
+      createdBy: 'staff-1',
+    },
+  ];
+}
 
 export function generateLoyaltyProgram(): LoyaltyProgram {
   const raw = (RAW as any).loyaltyProgram ?? {};
@@ -442,6 +619,7 @@ export function getSeedDataset(): SeedDataset {
   const analyticsSnapshots = (RAW.analyticsSnapshots ?? []) as AnalyticsSnapshotRaw[];
   const auditLog          = generateAuditLog();
   const loyaltyProgram    = generateLoyaltyProgram();
+  const loyaltyPromotions = generateLoyaltyPromotions();
   const ratePlans         = generateRatePlans();
   const settings          = generateSettings();
 
@@ -450,7 +628,7 @@ export function getSeedDataset(): SeedDataset {
     housekeepingTasks, maintenance, concierge, analyticsSnapshots,
     auditLog,
     loyaltyProgram,
-    loyaltyPromotions: [],   // populated at runtime via MockLoyaltyService
+    loyaltyPromotions,
     ratePlans,
     settings,
   };

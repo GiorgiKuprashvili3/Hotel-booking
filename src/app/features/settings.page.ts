@@ -1,17 +1,777 @@
-import { Component } from '@angular/core';
-import { FeaturePlaceholderComponent } from '../shared/components/feature-placeholder.component';
+import {
+  Component, OnInit, inject, signal, computed, DestroyRef,
+} from '@angular/core';
+import { CommonModule, DecimalPipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { forkJoin } from 'rxjs';
+
+import {
+  SETTINGS_SERVICE, RATE_PLAN_SERVICE, ROOM_SERVICE, PROPERTY_SERVICE,
+} from '../data/services/service-tokens';
+import { PropertyContextService } from '../core/config/property-context.service';
+import { Property, RatePlan, RoomType, PropertySettings } from '../domain';
+
+type Tab = 'property' | 'tax' | 'roomtypes' | 'rateplans';
 
 @Component({
   selector: 'lux-settings-page',
   standalone: true,
-  imports: [FeaturePlaceholderComponent],
+  imports: [CommonModule, FormsModule, DecimalPipe],
   template: `
-    <lux-feature-placeholder
-      title="Settings"
-      subtitle="Property configuration, rates, taxes, integrations"
-      icon="settings"
-      [week]="7"
-      message="Tax rate, currency, check-in/out times, rate plan editor, and integration toggles." />
+<div class="set-page">
+
+  <!-- ── HEADER ─────────────────────────────────────────── -->
+  <header class="set-header">
+    <div class="set-title-block">
+      <div class="set-icon">⚙️</div>
+      <div>
+        <h1 class="set-title">Settings</h1>
+        <p class="set-sub">Property configuration · {{ propertyCtx.active()?.name }}</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── TABS ──────────────────────────────────────────── -->
+  <nav class="set-tabs">
+    <button class="set-tab" [class.active]="tab() === 'property'" (click)="tab.set('property')">
+      <span class="tab-icon">🏨</span> Property Info
+    </button>
+    <button class="set-tab" [class.active]="tab() === 'tax'" (click)="tab.set('tax')">
+      <span class="tab-icon">📊</span> Tax Rules
+    </button>
+    <button class="set-tab" [class.active]="tab() === 'roomtypes'" (click)="tab.set('roomtypes')">
+      <span class="tab-icon">🛏</span> Room Types
+    </button>
+    <button class="set-tab" [class.active]="tab() === 'rateplans'" (click)="tab.set('rateplans')">
+      <span class="tab-icon">💰</span> Rate Plans
+    </button>
+  </nav>
+
+  @if (loading()) {
+    <div class="set-loading">
+      <div class="spinner"></div>
+      <span>Loading settings…</span>
+    </div>
+  } @else {
+
+    <!-- ══ TAB: PROPERTY INFO ════════════════════════════ -->
+    @if (tab() === 'property') {
+      <div class="tab-content">
+        <div class="section-card">
+          <div class="section-header">
+            <h2 class="section-title">Property Information</h2>
+            <div class="section-sub">Core property details and operational settings</div>
+          </div>
+          @if (property()) {
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">Property Name</label>
+                <input class="form-input" [ngModel]="property()!.name" (ngModelChange)="patchProp('name', $event)" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Brand</label>
+                <input class="form-input" [ngModel]="property()!.brand" (ngModelChange)="patchProp('brand', $event)" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">City</label>
+                <input class="form-input" [ngModel]="property()!.city" (ngModelChange)="patchProp('city', $event)" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Country</label>
+                <input class="form-input" [ngModel]="property()!.country" (ngModelChange)="patchProp('country', $event)" />
+              </div>
+              <div class="form-group form-full">
+                <label class="form-label">Address</label>
+                <input class="form-input" [ngModel]="property()!.address" (ngModelChange)="patchProp('address', $event)" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Star Rating</label>
+                <select class="form-select" [ngModel]="property()!.starRating" (ngModelChange)="patchProp('starRating', +$event)">
+                  <option [value]="3">⭐⭐⭐ 3 Stars</option>
+                  <option [value]="4">⭐⭐⭐⭐ 4 Stars</option>
+                  <option [value]="5">⭐⭐⭐⭐⭐ 5 Stars</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Timezone</label>
+                <input class="form-input" [ngModel]="property()!.timezone" (ngModelChange)="patchProp('timezone', $event)" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Currency</label>
+                <input class="form-input" [ngModel]="property()!.currency" (ngModelChange)="patchProp('currency', $event)" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Check-in Time</label>
+                <input class="form-input" type="time" [ngModel]="property()!.checkInTime" (ngModelChange)="patchProp('checkInTime', $event)" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Check-out Time</label>
+                <input class="form-input" type="time" [ngModel]="property()!.checkOutTime" (ngModelChange)="patchProp('checkOutTime', $event)" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Total Rooms</label>
+                <input class="form-input" type="number" [ngModel]="property()!.totalRooms" (ngModelChange)="patchProp('totalRooms', +$event)" />
+              </div>
+            </div>
+          }
+        </div>
+
+        @if (settings()) {
+          <div class="section-card">
+            <div class="section-header">
+              <h2 class="section-title">Notifications</h2>
+              <div class="section-sub">Configure which system events trigger alerts</div>
+            </div>
+            <div class="toggle-list">
+              <label class="toggle-row">
+                <div class="toggle-info">
+                  <div class="toggle-label">New Reservation</div>
+                  <div class="toggle-desc">Alert when a new booking is confirmed</div>
+                </div>
+                <div class="toggle-switch" [class.on]="settings()!.notifications.newReservation"
+                     (click)="toggleNotif('newReservation')">
+                  <div class="toggle-thumb"></div>
+                </div>
+              </label>
+              <label class="toggle-row">
+                <div class="toggle-info">
+                  <div class="toggle-label">Check-in Reminder</div>
+                  <div class="toggle-desc">Alert before guest arrival</div>
+                </div>
+                <div class="toggle-switch" [class.on]="settings()!.notifications.checkInReminder"
+                     (click)="toggleNotif('checkInReminder')">
+                  <div class="toggle-thumb"></div>
+                </div>
+              </label>
+              <label class="toggle-row">
+                <div class="toggle-info">
+                  <div class="toggle-label">Maintenance Alert</div>
+                  <div class="toggle-desc">Alert on urgent maintenance requests</div>
+                </div>
+                <div class="toggle-switch" [class.on]="settings()!.notifications.maintenanceAlert"
+                     (click)="toggleNotif('maintenanceAlert')">
+                  <div class="toggle-thumb"></div>
+                </div>
+              </label>
+              <label class="toggle-row">
+                <div class="toggle-info">
+                  <div class="toggle-label">Housekeeping Complete</div>
+                  <div class="toggle-desc">Alert when a room is cleaned and inspected</div>
+                </div>
+                <div class="toggle-switch" [class.on]="settings()!.notifications.housekeepingComplete"
+                     (click)="toggleNotif('housekeepingComplete')">
+                  <div class="toggle-thumb"></div>
+                </div>
+              </label>
+              <label class="toggle-row">
+                <div class="toggle-info">
+                  <div class="toggle-label">Low Occupancy Alert</div>
+                  <div class="toggle-desc">Alert when occupancy drops below threshold</div>
+                </div>
+                <div class="toggle-switch" [class.on]="settings()!.notifications.lowOccupancyAlert"
+                     (click)="toggleNotif('lowOccupancyAlert')">
+                  <div class="toggle-thumb"></div>
+                </div>
+              </label>
+              @if (settings()!.notifications.lowOccupancyAlert) {
+                <div class="threshold-row">
+                  <label class="form-label">Low Occupancy Threshold (%)</label>
+                  <input class="form-input form-input-sm" type="number" min="0" max="100"
+                         [ngModel]="settings()!.notifications.lowOccupancyThreshold"
+                         (ngModelChange)="updateThreshold($event)" />
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        <div class="save-bar">
+          <div class="save-hint">{{ savedMsg() }}</div>
+          <button class="btn-save" [disabled]="saving()" (click)="saveSettings()">
+            {{ saving() ? 'Saving…' : 'Save Changes' }}
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- ══ TAB: TAX RULES ════════════════════════════════ -->
+    @if (tab() === 'tax') {
+      <div class="tab-content">
+        <div class="section-card">
+          <div class="section-header">
+            <h2 class="section-title">Tax Configuration</h2>
+            <div class="section-sub">Define tax rates applied to reservations and folios</div>
+          </div>
+
+          @if (property()) {
+            <div class="tax-main-rate">
+              <div class="tax-rate-label">VAT / Standard Tax Rate</div>
+              <div class="tax-rate-row">
+                <input class="form-input form-input-md" type="number" min="0" max="100" step="0.5"
+                       [ngModel]="(property()!.taxRate * 100).toFixed(1)"
+                       (ngModelChange)="patchProp('taxRate', +$event / 100)" />
+                <span class="tax-rate-pct">%</span>
+              </div>
+              <div class="tax-rate-hint">Currently applied to all room charges and F&B by default.</div>
+            </div>
+          }
+
+          <div class="tax-breakdown-list">
+            @for (rule of taxRules; track rule.label) {
+              <div class="tax-rule-row">
+                <div class="tax-rule-main">
+                  <div class="tax-rule-label">{{ rule.label }}</div>
+                  <div class="tax-rule-desc">{{ rule.desc }}</div>
+                </div>
+                <div class="tax-rule-right">
+                  <span class="tax-rule-pct">{{ rule.pct }}</span>
+                  <span class="tax-rule-badge" [class]="rule.type">{{ rule.type }}</span>
+                </div>
+              </div>
+            }
+          </div>
+          <div class="tax-note">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M8 7v4M8 5.5v.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+            Per-category rate overrides require backend configuration. Contact support to adjust individual line-item tax rules.
+          </div>
+        </div>
+
+        <div class="save-bar">
+          <div class="save-hint">{{ savedMsg() }}</div>
+          <button class="btn-save" [disabled]="saving()" (click)="saveSettings()">
+            {{ saving() ? 'Saving…' : 'Save Tax Rate' }}
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- ══ TAB: ROOM TYPES ═══════════════════════════════ -->
+    @if (tab() === 'roomtypes') {
+      <div class="tab-content">
+        <div class="section-card">
+          <div class="section-header">
+            <h2 class="section-title">Room Types</h2>
+            <div class="section-sub">{{ roomTypes().length }} room types configured for this property</div>
+          </div>
+          @if (roomTypes().length === 0) {
+            <div class="empty-state">
+              <div class="empty-icon">🛏</div>
+              <div class="empty-msg">No room types configured.</div>
+            </div>
+          }
+          <div class="roomtypes-grid">
+            @for (rt of roomTypes(); track rt.id) {
+              <div class="rt-card">
+                <div class="rt-card-top">
+                  <div class="rt-code">{{ rt.code }}</div>
+                  <div class="rt-price">₾{{ rt.basePrice | number:'1.0-0' }}<span class="rt-night">/night</span></div>
+                </div>
+                <div class="rt-name">{{ rt.name }}</div>
+                <div class="rt-desc">{{ rt.description }}</div>
+                <div class="rt-meta">
+                  <span class="rt-meta-item">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                      <path d="M8 2a3 3 0 100 6 3 3 0 000-6zM2 14c0-3.314 2.686-6 6-6s6 2.686 6 6"
+                            stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                    </svg>
+                    Max {{ rt.maxOccupancy }}
+                  </span>
+                  <span class="rt-meta-item">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                      <rect x="2" y="5" width="12" height="8" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+                      <path d="M5 5V4a3 3 0 016 0v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                    </svg>
+                    {{ rt.bedConfiguration }}
+                  </span>
+                  <span class="rt-meta-item">{{ rt.sizeSqm }} m²</span>
+                </div>
+                <div class="rt-amenities">
+                  @for (a of rt.amenities.slice(0, 3); track a) {
+                    <span class="rt-amenity">{{ a }}</span>
+                  }
+                  @if (rt.amenities.length > 3) {
+                    <span class="rt-amenity rt-more">+{{ rt.amenities.length - 3 }}</span>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ══ TAB: RATE PLANS ═══════════════════════════════ -->
+    @if (tab() === 'rateplans') {
+      <div class="tab-content">
+        <div class="section-card">
+          <div class="section-header">
+            <h2 class="section-title">Rate Plans</h2>
+            <div class="section-sub">{{ ratePlans().length }} plans · {{ activePlans().length }} active</div>
+            <button class="btn-new-plan" (click)="openPlanDialog(null)">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+              New Rate Plan
+            </button>
+          </div>
+
+          @if (ratePlans().length === 0) {
+            <div class="empty-state">
+              <div class="empty-icon">💰</div>
+              <div class="empty-msg">No rate plans configured.</div>
+            </div>
+          }
+
+          <div class="plans-table">
+            <div class="plans-thead">
+              <div class="pth">Plan</div>
+              <div class="pth">Code</div>
+              <div class="pth">Cancellation</div>
+              <div class="pth">Deposit</div>
+              <div class="pth">Refundable</div>
+              <div class="pth">Status</div>
+              <div class="pth"></div>
+            </div>
+            @for (plan of ratePlans(); track plan.id) {
+              <div class="plans-row" [class.plan-inactive]="!plan.isActive">
+                <div class="ptd">
+                  <div class="plan-name">{{ plan.name }}</div>
+                  @if (plan.description) {
+                    <div class="plan-desc">{{ plan.description }}</div>
+                  }
+                </div>
+                <div class="ptd"><span class="plan-code">{{ plan.code }}</span></div>
+                <div class="ptd">
+                  @if (plan.cancellationHours === 0) {
+                    <span class="canc-chip non-refund">Non-refundable</span>
+                  } @else {
+                    <span class="canc-chip refund">Free cancel ≤{{ plan.cancellationHours }}h</span>
+                  }
+                </div>
+                <div class="ptd deposit-val">{{ plan.depositPct }}%</div>
+                <div class="ptd">
+                  @if (plan.isRefundable) {
+                    <span class="bool-yes">✓ Yes</span>
+                  } @else {
+                    <span class="bool-no">✕ No</span>
+                  }
+                </div>
+                <div class="ptd">
+                  @if (plan.isActive) {
+                    <span class="status-active">Active</span>
+                  } @else {
+                    <span class="status-inactive">Inactive</span>
+                  }
+                </div>
+                <div class="ptd ptd-actions">
+                  <button class="action-btn" (click)="openPlanDialog(plan)" title="Edit">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                      <path d="M11.5 2.5a1.5 1.5 0 012.1 2.1L5 13H3v-2L11.5 2.5z"
+                            stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  @if (plan.isActive) {
+                    <button class="action-btn danger" (click)="deactivatePlan(plan)" title="Deactivate">
+                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/>
+                        <path d="M5 8h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                      </svg>
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    }
+  }
+</div>
+
+<!-- ── RATE PLAN DIALOG ───────────────────────────────── -->
+@if (planDialogOpen()) {
+  <div class="dialog-backdrop" (click)="closePlanDialog()">
+    <div class="dialog-panel" (click)="$event.stopPropagation()">
+      <div class="dialog-header">
+        <h2 class="dialog-title">{{ editingPlan() ? 'Edit Rate Plan' : 'New Rate Plan' }}</h2>
+        <button class="dialog-close" (click)="closePlanDialog()">✕</button>
+      </div>
+      <div class="dialog-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Plan Name *</label>
+            <input class="form-input" [(ngModel)]="planForm.name" placeholder="Best Available Rate" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Code *</label>
+            <input class="form-input" [(ngModel)]="planForm.code" placeholder="BAR" style="text-transform:uppercase" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <input class="form-input" [(ngModel)]="planForm.description" placeholder="Flexible rate with free cancellation" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Free Cancellation (hours before)</label>
+            <input class="form-input" type="number" [(ngModel)]="planForm.cancellationHours" min="0" step="12" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Deposit Required (%)</label>
+            <input class="form-input" type="number" [(ngModel)]="planForm.depositPct" min="0" max="100" step="5" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Refundable</label>
+            <select class="form-select" [(ngModel)]="planForm.isRefundable">
+              <option [ngValue]="true">Yes</option>
+              <option [ngValue]="false">No</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Status</label>
+            <select class="form-select" [(ngModel)]="planForm.isActive">
+              <option [ngValue]="true">Active</option>
+              <option [ngValue]="false">Inactive</option>
+            </select>
+          </div>
+        </div>
+        @if (planError()) {
+          <div class="form-error">{{ planError() }}</div>
+        }
+      </div>
+      <div class="dialog-footer">
+        <button class="btn-cancel" (click)="closePlanDialog()">Cancel</button>
+        <button class="btn-save" [disabled]="planSaving()" (click)="submitPlan()">
+          {{ planSaving() ? 'Saving…' : (editingPlan() ? 'Save Changes' : 'Create Plan') }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<style>
+/* ── Layout ──────────────────────────────────────────── */
+.set-page { display:flex; flex-direction:column; height:100%; background:var(--surface-ground,#F8F7F4); }
+
+.set-header { display:flex; align-items:center; gap:12px;
+  padding:20px 24px 16px; background:#fff; border-bottom:1px solid #E5E7EB; }
+.set-icon { width:40px; height:40px; background:#F3F4F6; border-radius:10px;
+  display:flex; align-items:center; justify-content:center; font-size:18px; }
+.set-title { font-size:1.25rem; font-weight:700; color:#111827; margin:0; }
+.set-sub { font-size:.8rem; color:#6B7280; margin:0; }
+
+/* Tabs */
+.set-tabs { display:flex; gap:0; padding:0 24px; background:#fff;
+  border-bottom:2px solid #E5E7EB; overflow-x:auto; }
+.set-tab { display:flex; align-items:center; gap:6px; padding:12px 20px;
+  border:none; background:transparent; font-size:.85rem; font-weight:500;
+  color:#6B7280; cursor:pointer; border-bottom:2.5px solid transparent;
+  margin-bottom:-2px; transition:.15s; white-space:nowrap; }
+.set-tab:hover { color:#111827; }
+.set-tab.active { color:#7C3AED; border-bottom-color:#7C3AED; font-weight:600; }
+.tab-icon { font-size:.85rem; }
+
+/* Loading */
+.set-loading { display:flex; align-items:center; justify-content:center; gap:10px;
+  padding:80px 0; color:#6B7280; }
+.spinner { width:20px; height:20px; border:2px solid #E5E7EB; border-top-color:#7C3AED;
+  border-radius:50%; animation:spin .7s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* Tab content */
+.tab-content { flex:1; overflow:auto; padding:20px 24px 32px;
+  display:flex; flex-direction:column; gap:16px; }
+
+/* Section card */
+.section-card { background:#fff; border:1px solid #E5E7EB; border-radius:14px;
+  padding:20px; position:relative; }
+.section-header { margin-bottom:18px; }
+.section-title { font-size:1rem; font-weight:700; color:#111827; margin:0 0 3px; }
+.section-sub { font-size:.78rem; color:#6B7280; }
+
+/* Form grid */
+.form-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.form-full { grid-column:1/-1; }
+.form-group { display:flex; flex-direction:column; gap:5px; }
+.form-label { font-size:.78rem; font-weight:600; color:#374151; }
+.form-input, .form-select { padding:8px 10px; border:1px solid #E5E7EB; border-radius:7px;
+  font-size:.85rem; color:#111827; background:#fff; outline:none; transition:.15s; }
+.form-input:focus, .form-select:focus { border-color:#7C3AED; box-shadow:0 0 0 3px #EDE9FE; }
+.form-input-sm { width:100px; }
+.form-input-md { width:140px; }
+
+/* Toggles */
+.toggle-list { display:flex; flex-direction:column; gap:0; }
+.toggle-row { display:flex; align-items:center; justify-content:space-between;
+  padding:12px 0; border-bottom:1px solid #F3F4F6; cursor:pointer; }
+.toggle-row:last-child { border-bottom:none; }
+.toggle-info { flex:1; }
+.toggle-label { font-size:.88rem; font-weight:600; color:#111827; }
+.toggle-desc { font-size:.75rem; color:#6B7280; margin-top:2px; }
+.toggle-switch { width:42px; height:24px; background:#E5E7EB; border-radius:12px;
+  position:relative; cursor:pointer; transition:.2s; flex-shrink:0; }
+.toggle-switch.on { background:#7C3AED; }
+.toggle-thumb { width:18px; height:18px; background:#fff; border-radius:50%;
+  position:absolute; top:3px; left:3px; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+.toggle-switch.on .toggle-thumb { left:21px; }
+.threshold-row { display:flex; align-items:center; gap:10px; padding:10px 0; }
+
+/* Save bar */
+.save-bar { display:flex; align-items:center; justify-content:flex-end; gap:12px;
+  background:#fff; border:1px solid #E5E7EB; border-radius:10px;
+  padding:12px 16px; }
+.save-hint { font-size:.8rem; color:#16A34A; font-weight:500; flex:1; }
+.btn-save { padding:0 20px; height:36px; background:#7C3AED; color:#fff; border:none;
+  border-radius:7px; font-size:.85rem; font-weight:600; cursor:pointer; transition:.15s; }
+.btn-save:hover { background:#6D28D9; }
+.btn-save:disabled { opacity:.6; cursor:not-allowed; }
+
+/* Tax tab */
+.tax-main-rate { background:#F9FAFB; border:1px solid #E5E7EB; border-radius:10px;
+  padding:16px; margin-bottom:16px; }
+.tax-rate-label { font-size:.82rem; font-weight:700; color:#374151; margin-bottom:8px; }
+.tax-rate-row { display:flex; align-items:center; gap:8px; }
+.tax-rate-pct { font-size:1rem; font-weight:600; color:#374151; }
+.tax-rate-hint { font-size:.75rem; color:#9CA3AF; margin-top:6px; }
+.tax-breakdown-list { display:flex; flex-direction:column; gap:0; }
+.tax-rule-row { display:flex; align-items:center; justify-content:space-between;
+  padding:11px 0; border-bottom:1px solid #F3F4F6; }
+.tax-rule-row:last-child { border-bottom:none; }
+.tax-rule-label { font-size:.85rem; font-weight:600; color:#111827; }
+.tax-rule-desc { font-size:.74rem; color:#6B7280; margin-top:1px; }
+.tax-rule-right { display:flex; align-items:center; gap:8px; }
+.tax-rule-pct { font-size:.88rem; font-weight:700; color:#374151; }
+.tax-rule-badge { font-size:.7rem; padding:2px 8px; border-radius:4px; font-weight:600; }
+.tax-rule-badge.standard { background:#EDE9FE; color:#7C3AED; }
+.tax-rule-badge.reduced  { background:#DCFCE7; color:#16A34A; }
+.tax-rule-badge.exempt   { background:#F3F4F6; color:#6B7280; }
+.tax-note { display:flex; align-items:flex-start; gap:8px; font-size:.76rem; color:#6B7280;
+  background:#F9FAFB; border-radius:7px; padding:10px; margin-top:12px; }
+
+/* Room types */
+.roomtypes-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:14px; }
+.rt-card { border:1.5px solid #E5E7EB; border-radius:12px; padding:16px; transition:.2s;
+  background:#FAFAFA; }
+.rt-card:hover { border-color:#7C3AED; box-shadow:0 4px 16px rgba(124,58,237,.08); background:#fff; }
+.rt-card-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.rt-code { font-size:.72rem; font-weight:700; background:#EDE9FE; color:#7C3AED;
+  padding:2px 8px; border-radius:4px; }
+.rt-price { font-size:1.05rem; font-weight:800; color:#111827; }
+.rt-night { font-size:.7rem; font-weight:400; color:#6B7280; }
+.rt-name { font-size:.92rem; font-weight:700; color:#111827; margin-bottom:4px; }
+.rt-desc { font-size:.78rem; color:#6B7280; line-height:1.4; margin-bottom:10px; }
+.rt-meta { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:8px; }
+.rt-meta-item { display:flex; align-items:center; gap:4px; font-size:.74rem; color:#374151; }
+.rt-amenities { display:flex; flex-wrap:wrap; gap:4px; }
+.rt-amenity { font-size:.7rem; padding:2px 7px; background:#F3F4F6; border-radius:4px; color:#374151; }
+.rt-more { background:#EDE9FE; color:#7C3AED; }
+
+/* Rate plans table */
+.section-header { display:flex; align-items:flex-start; flex-wrap:wrap; gap:8px; }
+.btn-new-plan { display:flex; align-items:center; gap:6px; padding:0 12px; height:32px;
+  background:#7C3AED; color:#fff; border:none; border-radius:7px;
+  font-size:.78rem; font-weight:600; cursor:pointer; margin-left:auto; }
+.plans-table { border:1px solid #F3F4F6; border-radius:10px; overflow:hidden; }
+.plans-thead { display:grid; grid-template-columns:1fr 80px 180px 80px 100px 90px 80px;
+  padding:0 12px; background:#F9FAFB; border-bottom:1px solid #E5E7EB; }
+.pth { padding:9px 8px; font-size:.7rem; font-weight:600; color:#6B7280; text-transform:uppercase; letter-spacing:.04em; }
+.plans-row { display:grid; grid-template-columns:1fr 80px 180px 80px 100px 90px 80px;
+  padding:0 12px; border-bottom:1px solid #F3F4F6; align-items:center; transition:.1s; }
+.plans-row:hover { background:#FAFAFA; }
+.plans-row:last-child { border-bottom:none; }
+.plan-inactive { opacity:.55; }
+.ptd { padding:10px 8px; font-size:.82rem; color:#374151; }
+.plan-name { font-weight:600; color:#111827; }
+.plan-desc { font-size:.73rem; color:#9CA3AF; }
+.plan-code { font-size:.72rem; font-weight:700; background:#F3F4F6; color:#374151;
+  padding:2px 7px; border-radius:4px; }
+.canc-chip { font-size:.72rem; padding:2px 8px; border-radius:4px; font-weight:600; }
+.canc-chip.refund     { background:#DCFCE7; color:#16A34A; }
+.canc-chip.non-refund { background:#FEE2E2; color:#DC2626; }
+.deposit-val { font-weight:600; }
+.bool-yes { color:#16A34A; font-weight:600; font-size:.82rem; }
+.bool-no  { color:#DC2626; font-weight:600; font-size:.82rem; }
+.status-active   { color:#16A34A; font-weight:600; font-size:.8rem; }
+.status-inactive { color:#9CA3AF; font-weight:600; font-size:.8rem; }
+.ptd-actions { display:flex; gap:4px; }
+.action-btn { width:28px; height:28px; border:1px solid #E5E7EB; border-radius:6px;
+  background:#fff; display:flex; align-items:center; justify-content:center;
+  cursor:pointer; color:#6B7280; transition:.15s; }
+.action-btn:hover { border-color:#7C3AED; color:#7C3AED; }
+.action-btn.danger:hover { border-color:#DC2626; color:#DC2626; }
+
+/* Empty */
+.empty-state { display:flex; flex-direction:column; align-items:center; gap:8px;
+  padding:50px 0; color:#9CA3AF; }
+.empty-icon { font-size:2rem; }
+.empty-msg { font-size:.85rem; }
+
+/* Dialog */
+.dialog-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex;
+  align-items:center; justify-content:center; z-index:1000; padding:16px; }
+.dialog-panel { background:#fff; border-radius:14px; width:100%; max-width:500px;
+  box-shadow:0 20px 60px rgba(0,0,0,.2); overflow:hidden; }
+.dialog-header { display:flex; align-items:center; justify-content:space-between;
+  padding:18px 20px 14px; border-bottom:1px solid #F3F4F6; }
+.dialog-title { font-size:1rem; font-weight:700; color:#111827; margin:0; }
+.dialog-close { width:30px; height:30px; border:none; background:#F9FAFB; border-radius:6px;
+  cursor:pointer; font-size:.85rem; color:#6B7280; }
+.dialog-body { padding:20px; display:flex; flex-direction:column; gap:14px; }
+.dialog-footer { display:flex; justify-content:flex-end; gap:8px;
+  padding:14px 20px; border-top:1px solid #F3F4F6; background:#FAFAFA; }
+.form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.form-error { background:#FEE2E2; color:#DC2626; border-radius:7px; padding:8px 10px; font-size:.8rem; }
+.btn-cancel { padding:0 16px; height:36px; border:1px solid #E5E7EB; border-radius:7px;
+  background:#fff; color:#374151; font-size:.85rem; cursor:pointer; }
+</style>
   `,
 })
-export class SettingsPageComponent {}
+export class SettingsPageComponent implements OnInit {
+  private settingsSvc  = inject(SETTINGS_SERVICE);
+  private ratePlanSvc  = inject(RATE_PLAN_SERVICE);
+  private roomSvc      = inject(ROOM_SERVICE);
+  private propertySvc  = inject(PROPERTY_SERVICE);
+  readonly propertyCtx = inject(PropertyContextService);
+  private destroyRef   = inject(DestroyRef);
+
+  tab     = signal<Tab>('property');
+  loading = signal(true);
+  saving  = signal(false);
+  savedMsg = signal('');
+
+  settings  = signal<PropertySettings | null>(null);
+  property  = signal<Property | null>(null);
+  roomTypes = signal<RoomType[]>([]);
+  ratePlans = signal<RatePlan[]>([]);
+
+  activePlans = computed(() => this.ratePlans().filter(p => p.isActive));
+
+  planDialogOpen = signal(false);
+  editingPlan    = signal<RatePlan | null>(null);
+  planSaving     = signal(false);
+  planError      = signal('');
+
+  planForm = {
+    name: '', code: '', description: '', cancellationHours: 24, depositPct: 0,
+    isRefundable: true, isActive: true,
+  };
+
+  readonly taxRules = [
+    { label: 'Room Revenue',   desc: 'All room and accommodation charges',     pct: '18%', type: 'standard' },
+    { label: 'F&B Revenue',    desc: 'Food and beverage services',             pct: '18%', type: 'standard' },
+    { label: 'Spa Services',   desc: 'Spa, wellness, and beauty services',     pct: '18%', type: 'standard' },
+    { label: 'Parking',        desc: 'Valet and self-parking charges',         pct: '10%', type: 'reduced'  },
+    { label: 'City Tax',       desc: 'Municipal tourism levy (per person/night)', pct: '₾5 flat', type: 'standard' },
+    { label: 'Tour Packages',  desc: 'Excursion and guided tour packages',     pct: '0%',  type: 'exempt'   },
+  ];
+
+  ngOnInit() {
+    const pid = this.propertyCtx.active()?.id ?? '';
+    forkJoin({
+      settings:  this.settingsSvc.get(),
+      property:  this.propertySvc.getById(pid),
+      roomTypes: this.roomSvc.listTypes(pid),
+      ratePlans: this.ratePlanSvc.list(),
+    }).pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(({ settings, property, roomTypes, ratePlans }) => {
+        this.settings.set(settings);
+        this.property.set(property ?? null);
+        this.roomTypes.set(roomTypes);
+        this.ratePlans.set(ratePlans);
+        this.loading.set(false);
+      });
+  }
+
+  patchProp(key: string, value: unknown) {
+    this.property.update(p => p ? { ...p, [key]: value } : p);
+  }
+
+  toggleNotif(key: keyof PropertySettings['notifications']) {
+    this.settings.update(s => s ? {
+      ...s,
+      notifications: { ...s.notifications, [key]: !s.notifications[key] },
+    } : s);
+  }
+
+  updateThreshold(val: number) {
+    this.settings.update(s => s ? {
+      ...s, notifications: { ...s.notifications, lowOccupancyThreshold: val },
+    } : s);
+  }
+
+  saveSettings() {
+    const s = this.settings();
+    if (!s) return;
+    this.saving.set(true);
+    this.settingsSvc.update(s)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: updated => {
+          this.settings.set(updated);
+          this.saving.set(false);
+          this.savedMsg.set('✓ Saved successfully');
+          setTimeout(() => this.savedMsg.set(''), 3000);
+        },
+        error: () => { this.saving.set(false); },
+      });
+  }
+
+  /* ── Rate plans ──────────────────────────────────────── */
+  openPlanDialog(plan: RatePlan | null) {
+    this.editingPlan.set(plan);
+    if (plan) {
+      this.planForm = {
+        name: plan.name, code: plan.code, description: plan.description ?? '',
+        cancellationHours: plan.cancellationHours, depositPct: plan.depositPct,
+        isRefundable: plan.isRefundable, isActive: plan.isActive,
+      };
+    } else {
+      this.planForm = { name:'', code:'', description:'', cancellationHours:24, depositPct:0, isRefundable:true, isActive:true };
+    }
+    this.planError.set('');
+    this.planDialogOpen.set(true);
+  }
+
+  closePlanDialog() { if (!this.planSaving()) this.planDialogOpen.set(false); }
+
+  submitPlan() {
+    if (!this.planForm.name.trim() || !this.planForm.code.trim()) {
+      this.planError.set('Name and code are required.');
+      return;
+    }
+    this.planSaving.set(true);
+    const editing = this.editingPlan();
+    const payload = { ...this.planForm, code: this.planForm.code.toUpperCase() };
+
+    const op$ = editing
+      ? this.ratePlanSvc.update(editing.id, payload)
+      : this.ratePlanSvc.create(payload);
+
+    op$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: plan => {
+        if (editing) {
+          this.ratePlans.update(list => list.map(p => p.id === plan.id ? plan : p));
+        } else {
+          this.ratePlans.update(list => [...list, plan]);
+        }
+        this.planSaving.set(false);
+        this.planDialogOpen.set(false);
+      },
+      error: () => { this.planSaving.set(false); this.planError.set('Failed to save rate plan.'); },
+    });
+  }
+
+  deactivatePlan(plan: RatePlan) {
+    this.ratePlanSvc.deactivate(plan.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(updated => {
+        this.ratePlans.update(list => list.map(p => p.id === updated.id ? updated : p));
+      });
+  }
+}

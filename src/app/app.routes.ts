@@ -116,6 +116,13 @@ export const APP_ROUTES: Routes = [
         title: 'Staff · LuxStay',
       },
       {
+        path: 'audit',
+        canActivate: [roleGuard],
+        data: { roles: [Role.Admin, Role.Manager] },
+        loadComponent: () => import('./features/audit.page').then(m => m.AuditPageComponent),
+        title: 'Audit Log · LuxStay',
+      },
+      {
         path: 'settings',
         canActivate: [roleGuard],
         data: { roles: [Role.Admin] },
