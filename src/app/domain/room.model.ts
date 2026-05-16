@@ -39,3 +39,14 @@ export interface RatePlan {
   refundable: boolean;
   includesBreakfast: boolean;
 }
+
+/** A log entry every time a room's status changes — surfaced in the room drawer. */
+export interface RoomStatusHistory {
+  id: string;
+  roomId: string;
+  from: RoomStatus;
+  to: RoomStatus;
+  at: Date;
+  staffId?: string;
+  note?: string;
+}
