@@ -16,11 +16,11 @@ import { Property, RoomType, BookingSource } from '../../domain';
 const FEATURED_PROPERTY_ID = 'prop-1';
 
 const ROOM_IMAGES: Record<string, string> = {
-  STD: 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=900&q=80',
-  DLX: 'https://images.unsplash.com/photo-1618773928121-c32242e63f39?w=900&q=80',
-  STE: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?w=900&q=80',
-  EXE: 'https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=900&q=80',
-  PRE: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=900&q=80',
+  STD:  'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=900&q=80',
+  DLX:  'https://images.unsplash.com/photo-1618773928121-c32242e63f39?w=900&q=80',
+  STE:  'https://images.unsplash.com/photo-1590490360182-c33d57733427?w=900&q=80',
+  EXC:  'https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=900&q=80',
+  PRES: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=900&q=80',
 };
 const ROOM_FALLBACK = 'https://images.unsplash.com/photo-1590490359683-658d3d23f972?w=900&q=80';
 
@@ -328,7 +328,8 @@ interface ConfirmationView {
                 <label for="cardName">Cardholder name</label>
                 <input id="cardName" type="text" autocomplete="cc-name"
                        [(ngModel)]="cardName" name="cardName"
-                       placeholder="As shown on card" />
+                       placeholder="As shown on card"
+                       [attr.aria-invalid]="paymentTouched() && !cardName.trim() ? 'true' : null" />
               </div>
 
               <div class="form-field">
@@ -340,7 +341,8 @@ interface ConfirmationView {
                          (ngModelChange)="onCardChange($event)"
                          name="cardNumber"
                          placeholder="•••• •••• •••• ••••"
-                         maxlength="19" />
+                         maxlength="19"
+                         [attr.aria-invalid]="paymentTouched() && !validCardNumber() ? 'true' : null" />
                   <mat-icon class="card-icon" aria-hidden="true">credit_card</mat-icon>
                 </div>
               </div>
@@ -353,14 +355,16 @@ interface ConfirmationView {
                          [ngModel]="cardExpiry()"
                          (ngModelChange)="onExpiryChange($event)"
                          name="cardExpiry"
-                         placeholder="MM/YY" maxlength="5" />
+                         placeholder="MM/YY" maxlength="5"
+                         [attr.aria-invalid]="paymentTouched() && !validExpiry() ? 'true' : null" />
                 </div>
                 <div class="form-field">
                   <label for="cardCvc">CVC</label>
                   <input id="cardCvc" type="text" inputmode="numeric"
                          autocomplete="cc-csc"
                          [(ngModel)]="cardCvc" name="cardCvc"
-                         placeholder="•••" maxlength="4" />
+                         placeholder="•••" maxlength="4"
+                         [attr.aria-invalid]="paymentTouched() && !validCvc() ? 'true' : null" />
                 </div>
               </div>
 
@@ -370,6 +374,12 @@ interface ConfirmationView {
                   and free cancellation up to 24 hours before arrival.</span>
               </label>
 
+              @if (paymentTouched() && !canSubmitPayment()) {
+                <div class="field-error" role="alert">
+                  <mat-icon>error_outline</mat-icon>
+                  Please fill in all card details and accept the terms to continue.
+                </div>
+              }
               @if (submitError()) {
                 <div class="field-error" role="alert">
                   <mat-icon>error_outline</mat-icon>
@@ -382,7 +392,7 @@ interface ConfirmationView {
                   <mat-icon>arrow_back</mat-icon> Back
                 </button>
                 <button mat-flat-button color="primary" type="submit"
-                        [disabled]="submitting() || !termsAccepted">
+                        [disabled]="submitting() || !canSubmitPayment()">
                   @if (submitting()) {
                     <span class="spinner" aria-hidden="true"></span>
                     Confirming reservation…
@@ -1016,6 +1026,7 @@ export class BookingFlowComponent {
   submitting       = signal(false);
   submitError      = signal<string | null>(null);
   touched          = signal(false);
+  paymentTouched   = signal(false);
   confirmation     = signal<ConfirmationView | null>(null);
 
   /* Step 1 inputs */
@@ -1077,6 +1088,23 @@ export class BookingFlowComponent {
     return !!this.firstName.trim() &&
            !!this.lastName.trim() &&
            this.validEmail();
+  }
+
+  validCardNumber(): boolean {
+    return this.cardNumber().replace(/\s/g, '').length === 16;
+  }
+  validExpiry(): boolean {
+    return /^(0[1-9]|1[0-2])\/\d{2}$/.test(this.cardExpiry());
+  }
+  validCvc(): boolean {
+    return /^\d{3,4}$/.test(this.cardCvc.trim());
+  }
+  canSubmitPayment(): boolean {
+    return !!this.cardName.trim() &&
+           this.validCardNumber() &&
+           this.validExpiry() &&
+           this.validCvc() &&
+           this.termsAccepted;
   }
 
   constructor() {
@@ -1181,7 +1209,8 @@ export class BookingFlowComponent {
   }
 
   submitBooking(): void {
-    if (!this.termsAccepted) return;
+    this.paymentTouched.set(true);
+    if (!this.canSubmitPayment()) return;
     const rt = this.selectedRoomType();
     if (!rt) return;
 

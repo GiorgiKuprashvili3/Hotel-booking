@@ -238,7 +238,7 @@ import { PaymentMethod } from '../../domain/enums';
       @if (step() < 3) {
         <button class="btn-next" (click)="next()">Next</button>
       } @else {
-        <button class="btn-confirm" [disabled]="submitting()" (click)="submit()">
+        <button class="btn-confirm" [disabled]="submitting() || !canSubmit()" (click)="submit()">
           @if (submitting()) { <span class="spinner"></span> } @else { Confirm check-out }
         </button>
       }
@@ -255,7 +255,7 @@ import { PaymentMethod } from '../../domain/enums';
       position: fixed; top: 50%; left: 50%;
       transform: translate(-50%, -50%); z-index: 301;
       width: min(640px, calc(100vw - 32px));
-      max-height: calc(100vh - 64px);
+      max-height: calc(75vh - 64px);
       background: var(--surface); border-radius: var(--radius-xl);
       box-shadow: var(--shadow-3);
       display: flex; flex-direction: column; overflow: hidden;
@@ -494,6 +494,15 @@ export class CheckOutWizardComponent implements OnInit {
 
   finalBalance = computed(() =>
     Math.max(0, this.reservation().balance - this.paymentAmount()));
+
+  // Confirm is allowed when:
+  // - balance is already zero (nothing to collect), OR
+  // - there IS a balance and the user has entered a positive payment amount with a method selected
+  canSubmit = computed(() => {
+    const balance = this.reservation().balance;
+    if (balance <= 0) return true;
+    return this.paymentAmount() > 0 && !!this.paymentMethod();
+  });
 
   assignedRoom = computed(() => this.roomNumber() ?? '—');
 

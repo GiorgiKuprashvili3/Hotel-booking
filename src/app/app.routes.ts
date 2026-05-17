@@ -53,6 +53,7 @@ export const APP_ROUTES: Routes = [
             .then(m => m.ReservationsPageComponent),
       },
 
+      // Static segments must come before :id so the router doesn't swallow them
       {
         path: 'reservations/check-in',
         loadComponent: () =>
@@ -68,6 +69,13 @@ export const APP_ROUTES: Routes = [
       },
 
       {
+        path: 'reservations/:id',
+        loadComponent: () =>
+          import('./features/reservations/reservation-detail.page')
+            .then(m => m.ReservationDetailPageComponent),
+      },
+
+      {
         path: 'rooms',
         loadComponent: () =>
           import('./features/rooms.page')
@@ -79,6 +87,13 @@ export const APP_ROUTES: Routes = [
         loadComponent: () =>
           import('./features/guests.page')
             .then(m => m.GuestsPageComponent),
+      },
+
+      {
+        path: 'guests/:id',
+        loadComponent: () =>
+          import('./features/guests/guest-detail.page')
+            .then(m => m.GuestDetailPageComponent),
       },
 
       {

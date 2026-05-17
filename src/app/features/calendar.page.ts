@@ -203,7 +203,7 @@ export interface CalendarFilters {
     .cal-page {
       display: flex;
       flex-direction: column;
-      height: calc(100vh - var(--topbar-height));
+      height: calc(75vh - var(--topbar-height));
       background: var(--bg);
       overflow: hidden;
     }

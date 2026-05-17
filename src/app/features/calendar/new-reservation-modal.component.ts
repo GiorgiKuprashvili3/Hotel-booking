@@ -374,7 +374,7 @@ function isValidEmail(v: string): boolean {
       transform: translate(-50%, -50%);
       z-index: 301;
       width: min(560px, calc(100vw - 32px));
-      max-height: calc(100vh - 64px);
+      max-height: calc(75vh - 64px);
       background: var(--surface);
       border-radius: var(--radius-xl, 16px);
       box-shadow: 0 24px 64px rgba(0,0,0,0.22);

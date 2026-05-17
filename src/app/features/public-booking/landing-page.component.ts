@@ -41,11 +41,11 @@ const GALLERY = [
  * has some broken placeholder URLs we want to override on the public surface.
  */
 const ROOM_IMAGES: Record<string, string> = {
-  STD: 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=1200&q=80',
-  DLX: 'https://images.unsplash.com/photo-1618773928121-c32242e63f39?w=1200&q=80',
-  STE: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?w=1200&q=80',
-  EXE: 'https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=1200&q=80',
-  PRE: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=1200&q=80',
+  STD:  'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=1200&q=80',
+  DLX:  'https://images.unsplash.com/photo-1618773928121-c32242e63f39?w=1200&q=80',
+  STE:  'https://images.unsplash.com/photo-1590490360182-c33d57733427?w=1200&q=80',
+  EXC:  'https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=1200&q=80',
+  PRES: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=1200&q=80',
 };
 const ROOM_FALLBACK = 'https://images.unsplash.com/photo-1590490359683-658d3d23f972?w=1200&q=80';
 

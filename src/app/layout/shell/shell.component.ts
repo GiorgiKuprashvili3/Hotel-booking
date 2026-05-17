@@ -228,7 +228,6 @@ const NAV: NavItem[] = [
     :host {
       display: block;
       height: 100vh;
-      overflow: hidden;
     }
 
     .overlay {
@@ -241,7 +240,6 @@ const NAV: NavItem[] = [
     .shell {
       display: flex;
       height: 100vh;
-      overflow: hidden;
       background: var(--bg, #F6F3EE);
     }
 

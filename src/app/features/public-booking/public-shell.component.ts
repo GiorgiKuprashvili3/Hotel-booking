@@ -153,7 +153,7 @@ import { AuthService } from '../../core/auth/auth.service';
     .staff-link:hover { color: var(--text); }
 
     .public-main {
-      min-height: calc(100vh - 64px);
+      min-height: calc(75vh - 64px);
     }
 
     .public-footer {
