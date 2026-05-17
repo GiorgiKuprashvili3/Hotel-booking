@@ -1,0 +1,256 @@
+<div class="grid-wrapper" #wrapper>
+
+  <!-- ── Sticky corner ───────────────────────────── -->
+  <div class="grid-corner">
+    <div class="corner-inner">
+      <span>Room</span>
+    </div>
+  </div>
+
+  <!-- ── Date header row ─────────────────────────── -->
+  <div class="date-header" #dateHeader>
+    <div class="date-row">
+      @for (day of days(); track day.date.getTime()) {
+        <div
+          class="date-cell"
+          [class.is-weekend]="day.isWeekend"
+          [class.is-today]="day.isToday"
+          [style.width.px]="COL_WIDTH">
+          <span class="date-month" *ngIf="day.date.getDate() === 1 || $index === 0">
+            {{ day.date | date:'MMM' }}
+          </span>
+          <span class="date-num">{{ day.date | date:'d' }}</span>
+          <span class="date-dow">{{ day.date | date:'EEE' | slice:0:2 }}</span>
+        </div>
+      }
+    </div>
+
+    <!-- Occupancy bar row -->
+    <div class="occ-row">
+      @for (day of days(); track day.date.getTime()) {
+        <div class="occ-cell" [style.width.px]="COL_WIDTH" [title]="day.pct + '% occupied'">
+          <div
+            class="occ-bar"
+            [style.height.%]="day.pct"
+            [class.occ-full]="day.pct >= 90"
+            [class.occ-high]="day.pct >= 70 && day.pct < 90">
+          </div>
+          <span class="occ-pct">{{ day.pct }}%</span>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- ── Scrollable body ──────────────────────────── -->
+  <div class="grid-scroll-body" #scrollBody (scroll)="syncScroll($event)">
+
+    <!-- Room rows -->
+    <div class="grid-body" [style.width.px]="gridWidth()">
+
+      <!-- ── Unassigned row ──────────────────────── -->
+      @if (unassignedReservations().length > 0) {
+        <div
+          class="grid-row grid-row--unassigned"
+          role="row"
+          aria-label="Unassigned reservations"
+          [style.height.px]="ROW_HEIGHT">
+
+          <!-- Label -->
+          <div class="room-label room-label--unassigned">
+            <div class="room-label__inner">
+              <span class="room-num">Unassigned</span>
+              <span class="room-type">{{ unassignedReservations().length }} res.</span>
+            </div>
+          </div>
+
+          <!-- Day cells (no create drag from unassigned) -->
+          <div class="day-cells">
+            @for (day of days(); track day.date.getTime()) {
+              <div
+                class="day-cell"
+                role="gridcell"
+                [attr.aria-label]="day.date | date:'MMM d, y'"
+                [class.is-weekend]="day.isWeekend"
+                [class.is-today]="day.isToday"
+                [style.width.px]="COL_WIDTH">
+              </div>
+            }
+          </div>
+
+          <!-- Unassigned bars -->
+          @for (res of unassignedReservations(); track res.id) {
+            @let pos = getBarPosition(res);
+            @if (pos) {
+              <div
+                class="res-bar res-bar--unassigned"
+                role="button"
+                [tabIndex]="0"
+                [attr.aria-label]="res.confirmationNumber + ', ' + (res.checkIn | date:'MMM d') + ' to ' + (res.checkOut | date:'MMM d, y') + ', unassigned'"
+                [class.is-cancelled]="res.status === CancelledStatus"
+                [class.is-dragging]="dragState()?.reservation?.id === res.id"
+                [style.left.px]="pos.left + ROOM_COL_W"
+                [style.width.px]="pos.width"
+                [style.top.px]="(ROW_HEIGHT - 32) / 2"
+                [style.height.px]="32"
+                [style.background]="getStatusColor(res.status)"
+                [title]="res.confirmationNumber"
+                (click)="reservationClick.emit(res)"
+                (keydown.enter)="reservationClick.emit(res)"
+                (keydown.space)="$event.preventDefault(); reservationClick.emit(res)"
+                (mousedown)="onUnassignedBarMouseDown($event, res)"
+                (touchstart)="onUnassignedBarTouchStart($event, res)">
+                <span class="res-bar__text">
+                  {{ res.confirmationNumber }}
+                  @if (pos.width > 100) { · {{ res.nights }}n }
+                </span>
+              </div>
+            }
+          }
+        </div>
+      }
+
+      @for (room of rooms(); track room.id; let ri = $index) {
+        <div
+          class="grid-row"
+          role="row"
+          [attr.aria-label]="'Room ' + room.number"
+          [class.floor-break]="ri > 0 && rooms()[ri-1].floor !== room.floor"
+          [style.height.px]="ROW_HEIGHT">
+
+          <!-- Room label (sticky left) -->
+          <div class="room-label">
+            <div class="room-label__inner">
+              <span class="room-num">{{ room.number }}</span>
+              <span class="room-type">{{ getRoomType(room.roomTypeId)?.code }}</span>
+            </div>
+            <span class="room-floor">F{{ room.floor }}</span>
+          </div>
+
+          <!-- Day cells background -->
+          <div class="day-cells">
+            @for (day of days(); track day.date.getTime()) {
+              <div
+                class="day-cell"
+                role="gridcell"
+                [attr.aria-label]="day.date | date:'MMM d, y'"
+                [class.is-weekend]="day.isWeekend"
+                [class.is-today]="day.isToday"
+                [style.width.px]="COL_WIDTH"
+                (mousedown)="onCellMouseDown($event, ri, $index)"
+                (touchstart)="onCellTouchStart($event, ri, $index)">
+              </div>
+            }
+          </div>
+
+          <!-- Reservation bars for this room -->
+          @for (res of getReservationsForRoom(room.id); track res.id) {
+            @let pos = getBarPosition(res);
+            @if (pos) {
+              <div
+                class="res-bar"
+                role="button"
+                [tabIndex]="0"
+                [attr.aria-label]="res.confirmationNumber + ', ' + (res.checkIn | date:'MMM d') + ' to ' + (res.checkOut | date:'MMM d, y') + ', ' + res.status"
+                [class.is-cancelled]="res.status === CancelledStatus"
+                [class.is-dragging]="dragState()?.reservation?.id === res.id"
+                [style.left.px]="pos.left + ROOM_COL_W"
+                [style.width.px]="pos.width"
+                [style.top.px]="(ROW_HEIGHT - 32) / 2"
+                [style.height.px]="32"
+                [style.background]="getStatusColor(res.status)"
+                [title]="res.confirmationNumber"
+                (click)="reservationClick.emit(res)"
+                (keydown.enter)="reservationClick.emit(res)"
+                (keydown.space)="$event.preventDefault(); reservationClick.emit(res)"
+                (mousedown)="onBarMouseDown($event, res)"
+                (touchstart)="onBarTouchStart($event, res)">
+
+                <span class="res-bar__text">
+                  {{ res.confirmationNumber }}
+                  @if (pos.width > 100) {
+                    · {{ res.nights }}n
+                  }
+                </span>
+
+                <!-- Resize handle -->
+                <div
+                  class="res-bar__resize"
+                  (mousedown)="onResizeMouseDown($event, res)">
+                </div>
+              </div>
+            }
+          }
+        </div>
+      }
+
+      <!-- Today line -->
+      @if (todayOffset() >= 0 && todayOffset() <= windowDays()) {
+        <div class="today-line" [style.left.px]="todayOffset() * COL_WIDTH + ROOM_COL_W">
+          <div class="today-line__label">Today</div>
+        </div>
+      }
+
+      <!-- Drag preview bar -->
+      @if (dragState() && dragState()!.type !== 'move') {
+        <div
+          class="drag-preview"
+          [class.drag-preview--collides]="dragState()!.collides"
+          [style.left.px]="dragPreviewLeft()"
+          [style.width.px]="dragPreviewWidth()"
+          [style.top.px]="dragState()!.currentRoomIndex * ROW_HEIGHT + (ROW_HEIGHT - 32) / 2"
+          [style.height.px]="32">
+        </div>
+      }
+
+    </div><!-- /grid-body -->
+  </div><!-- /grid-scroll-body -->
+
+</div><!-- /grid-wrapper -->
+
+<!-- Collision flash overlay -->
+@if (collisionFlash()) {
+  <div class="collision-overlay"></div>
+}
+
+<!-- Move confirmation modal -->
+@if (pendingMove(); as pm) {
+  <div class="move-backdrop" (click)="cancelMove()"></div>
+  <div
+    class="move-modal"
+    [style.left.px]="pm.modalX"
+    [style.top.px]="pm.modalY"
+    (click)="$event.stopPropagation()">
+
+    <div class="move-modal__icon">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <path d="M9 1v16M1 9h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity=".4"/>
+        <path d="M5 5l8 8M13 5l-8 8" stroke="currentColor" stroke-width="0" />
+        <rect x="3" y="7" width="5" height="4" rx="1" fill="currentColor" opacity=".15"/>
+        <rect x="10" y="7" width="5" height="4" rx="1" fill="currentColor" opacity=".15"/>
+        <path d="M7 9h4M9 7v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+    </div>
+
+    <div class="move-modal__body">
+      <p class="move-modal__title">Move reservation?</p>
+      <p class="move-modal__conf">{{ pm.reservation.confirmationNumber }}</p>
+      <div class="move-modal__detail">
+        <span class="move-modal__label">Room</span>
+        <span class="move-modal__val">{{ pm.newRoomName }}</span>
+      </div>
+      <div class="move-modal__detail">
+        <span class="move-modal__label">Check-in</span>
+        <span class="move-modal__val">{{ pm.newCheckIn | date:'MMM d, y' }}</span>
+      </div>
+      <div class="move-modal__detail">
+        <span class="move-modal__label">Check-out</span>
+        <span class="move-modal__val">{{ pm.newCheckOut | date:'MMM d, y' }}</span>
+      </div>
+    </div>
+
+    <div class="move-modal__actions">
+      <button class="btn-modal-cancel" (click)="cancelMove()">Cancel</button>
+      <button class="btn-modal-confirm" (click)="confirmMove()">Confirm move</button>
+    </div>
+  </div>
+}

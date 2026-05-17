@@ -1,0 +1,66 @@
+<a class="skip-link" href="#public-main">Skip to main content</a>
+
+<header class="public-header" role="banner">
+  <a routerLink="/book" class="brand" aria-label="The Aurora — home">
+    <span class="brand-mark" aria-hidden="true">L</span>
+    <span class="brand-text">
+      <span class="brand-name">The Aurora</span>
+      <span class="brand-sub">LUXSTAY COLLECTION</span>
+    </span>
+  </a>
+
+  <nav class="public-nav" aria-label="Primary">
+    <a routerLink="/book" fragment="rooms">Rooms</a>
+    <a routerLink="/book" fragment="amenities">Amenities</a>
+    <a routerLink="/book" fragment="gallery">Gallery</a>
+    <a routerLink="/book" fragment="contact">Contact</a>
+  </nav>
+
+  <div class="public-actions">
+    @if (auth.isAuthenticated()) {
+      <button mat-stroked-button (click)="goToAdmin()">
+        <mat-icon>dashboard</mat-icon>
+        Admin
+      </button>
+    } @else {
+      <a class="staff-link" routerLink="/auth/login">Staff sign-in</a>
+    }
+    <a mat-flat-button color="primary" routerLink="/book/reserve">Book a stay</a>
+  </div>
+</header>
+
+<main id="public-main" class="public-main">
+  <router-outlet />
+</main>
+
+<footer class="public-footer" role="contentinfo">
+  <div class="footer-grid">
+    <div>
+      <div class="brand small">
+        <span class="brand-mark" aria-hidden="true">L</span>
+        <span class="brand-name">The Aurora</span>
+      </div>
+      <p class="footer-tag">
+        A five-star sanctuary on Rustaveli Avenue, where Caucasus warmth
+        meets contemporary craft.
+      </p>
+    </div>
+    <div>
+      <h4>Visit</h4>
+      <p>14 Rustaveli Avenue<br>Tbilisi 0108, Georgia</p>
+      <p>+995 32 200 1000</p>
+    </div>
+    <div>
+      <h4>Hours</h4>
+      <p>Check-in 2:00 PM<br>Check-out 12:00 PM<br>Reception 24/7</p>
+    </div>
+    <div>
+      <h4>Follow</h4>
+      <p>Instagram · Facebook · LinkedIn</p>
+    </div>
+  </div>
+  <div class="footer-base">
+    <span>© 2026 LuxStay Collection</span>
+    <span>Privacy · Terms · Accessibility</span>
+  </div>
+</footer>

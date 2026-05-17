@@ -1,0 +1,213 @@
+<div class="res-page">
+
+  <!-- Header -->
+  <header class="res-header">
+    <div>
+      <h1 class="page-title">Reservations</h1>
+      <p class="page-sub">
+        {{ filtered().length }} of {{ reservations().length }}
+        <span class="dot-sep">·</span>
+        {{ propertyCtx.active()?.name }}
+      </p>
+    </div>
+    <div class="header-actions">
+      <button class="btn-primary" (click)="goToCalendar()">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+        New reservation
+      </button>
+    </div>
+  </header>
+
+  <!-- Saved views bar -->
+  <div class="views-bar">
+    <button
+      class="view-chip"
+      [class.active]="!activeViewId()"
+      (click)="loadView(null)">
+      All
+    </button>
+    @for (v of savedViews(); track v.id) {
+      <div class="view-chip-wrap">
+        <button
+          class="view-chip"
+          [class.active]="activeViewId() === v.id"
+          (click)="loadView(v.id)">
+          {{ v.name }}
+        </button>
+        <button class="view-del" (click)="deleteView(v.id, $event)" title="Delete view">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    }
+    <button class="view-chip view-chip--save" (click)="saveCurrentView()" [disabled]="!hasActiveFilters()">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      Save view
+    </button>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters">
+
+    <div class="filter-row">
+      <div class="filter-group filter-group--grow">
+        <label class="filter-lbl">Search</label>
+        <input
+          class="filter-input"
+          type="search"
+          placeholder="Confirmation #, guest name or email…"
+          [ngModel]="filters().search"
+          (ngModelChange)="updateFilter('search', $event)" />
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-lbl">From</label>
+        <input
+          class="filter-input"
+          type="date"
+          [ngModel]="filters().fromDate ?? ''"
+          (ngModelChange)="updateFilter('fromDate', $event || undefined)" />
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-lbl">To</label>
+        <input
+          class="filter-input"
+          type="date"
+          [ngModel]="filters().toDate ?? ''"
+          (ngModelChange)="updateFilter('toDate', $event || undefined)" />
+      </div>
+    </div>
+
+    <div class="filter-row">
+      <div class="filter-group filter-group--grow">
+        <label class="filter-lbl">Status</label>
+        <div class="chip-group">
+          @for (s of allStatuses; track s) {
+            <button
+              class="filter-chip"
+              [class.active]="filters().statuses.includes(s)"
+              [style.--c]="meta(s).color"
+              (click)="toggleStatus(s)">
+              {{ meta(s).label }}
+            </button>
+          }
+        </div>
+      </div>
+    </div>
+
+    <div class="filter-row">
+      <div class="filter-group filter-group--grow">
+        <label class="filter-lbl">Source</label>
+        <div class="chip-group">
+          @for (src of allSources; track src) {
+            <button
+              class="filter-chip"
+              [class.active]="filters().sources.includes(src)"
+              (click)="toggleSource(src)">
+              {{ srcLabel(src) }}
+            </button>
+          }
+        </div>
+      </div>
+      <div class="filter-group">
+        <label class="filter-lbl">&nbsp;</label>
+        <button class="btn-clear" (click)="clearFilters()" [disabled]="!hasActiveFilters()">
+          Clear filters
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    @if (loading()) {
+      <div class="loading">Loading reservations…</div>
+    } @else if (!filtered().length) {
+      <div class="empty">
+        <p>No reservations match your filters.</p>
+        @if (hasActiveFilters()) {
+          <button class="btn-link" (click)="clearFilters()">Clear filters</button>
+        }
+      </div>
+    } @else {
+      <table class="res-table">
+        <thead>
+          <tr>
+            <th>Confirmation</th>
+            <th>Guest</th>
+            <th>Room type</th>
+            <th>Dates</th>
+            <th class="num-col">Nights</th>
+            <th>Status</th>
+            <th>Source</th>
+            <th class="num-col">Total</th>
+            <th class="num-col">Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (r of filtered(); track r.id) {
+            <tr class="row" (click)="openDetail(r.id)">
+              <td class="row-conf">{{ r.confirmationNumber }}</td>
+              <td>
+                <div class="guest-cell">
+                  <span class="guest-name">{{ guestName(r.guestId) }}</span>
+                  <span class="guest-email">{{ guestEmail(r.guestId) }}</span>
+                </div>
+              </td>
+              <td>{{ typeName(r.roomTypeId) }}</td>
+              <td class="dates-cell">
+                <span>{{ r.checkIn | date:'MMM d' }}</span>
+                <span class="arrow">→</span>
+                <span>{{ r.checkOut | date:'MMM d, y' }}</span>
+              </td>
+              <td class="num-col">{{ r.nights }}</td>
+              <td>
+                <span class="status-pill"
+                      [style.color]="meta(r.status).color"
+                      [style.background]="meta(r.status).bg">
+                  {{ meta(r.status).label }}
+                </span>
+              </td>
+              <td class="src-cell">{{ srcLabel(r.source) }}</td>
+              <td class="num-col">{{ r.totalAmount | currency:'GEL':'symbol-narrow':'1.0-0' }}</td>
+              <td class="num-col">
+                @if (r.balance > 0) {
+                  <span class="balance">{{ r.balance | currency:'GEL':'symbol-narrow':'1.0-0' }}</span>
+                } @else {
+                  <span class="paid">Paid</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+</div>
+
+<!-- Save view modal -->
+@if (showSaveModal()) {
+  <div class="modal-backdrop" (click)="cancelSave()"></div>
+  <div class="save-modal" role="dialog">
+    <h3 class="save-title">Save current view</h3>
+    <p class="save-sub">Give this filter combination a name. It will be saved to this browser.</p>
+    <input
+      class="save-input"
+      type="text"
+      placeholder="e.g. 'Arrivals this week'"
+      [ngModel]="newViewName()"
+      (ngModelChange)="newViewName.set($event)"
+      autofocus
+      (keyup.enter)="confirmSave()" />
+    <div class="save-actions">
+      <button class="btn-secondary" (click)="cancelSave()">Cancel</button>
+      <button class="btn-primary" (click)="confirmSave()" [disabled]="!newViewName().trim()">Save</button>
+    </div>
+  </div>
+}

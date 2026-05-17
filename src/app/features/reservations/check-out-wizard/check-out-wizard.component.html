@@ -1,0 +1,221 @@
+<div class="wiz-backdrop" (click)="cancel.emit()"></div>
+<div class="wiz" role="dialog" aria-modal="true" aria-label="Check out" [@fade]>
+
+  <header class="wiz-head">
+    <div>
+      <h2 class="wiz-title">Check out guest</h2>
+      <p class="wiz-sub">{{ reservation().confirmationNumber }} · {{ guest()?.firstName }} {{ guest()?.lastName }}</p>
+    </div>
+    <button class="btn-close" (click)="cancel.emit()" aria-label="Close">
+      <svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 3l8 8M11 3L3 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+  </header>
+
+  <!-- Stepper -->
+  <div class="stepper">
+    @for (s of steps; track s.n; let i = $index) {
+      <div class="step"
+           [class.active]="step() === s.n"
+           [class.done]="step() > s.n">
+        <span class="step-dot">
+          @if (step() > s.n) {
+            <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 5l2 2 4-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+          } @else {
+            {{ s.n }}
+          }
+        </span>
+        <span class="step-label">{{ s.label }}</span>
+        @if (i < steps.length - 1) { <span class="step-line"></span> }
+      </div>
+    }
+  </div>
+
+  <div class="wiz-body">
+
+    @if (step() === 1) {
+      <!-- Step 1: Folio review -->
+      <h3 class="step-title">Review folio</h3>
+      <p class="step-help">Final review of charges and payments before settling the balance.</p>
+
+      @if (folio(); as f) {
+        <div class="folio-table">
+          <div class="folio-section-title">Charges</div>
+          @for (item of f.items; track item.id) {
+            <div class="folio-row">
+              <div class="folio-row__left">
+                <div class="folio-desc">{{ item.description }}</div>
+                <div class="folio-meta">
+                  <span class="folio-cat" [attr.data-cat]="item.category">{{ item.category }}</span>
+                  <span>{{ item.date | date:'MMM d' }}</span>
+                  @if (item.quantity > 1) { <span>× {{ item.quantity }}</span> }
+                </div>
+              </div>
+              <div class="folio-amt">{{ item.amount | currency:'GEL':'symbol-narrow':'1.2-2' }}</div>
+            </div>
+          }
+
+          @if (f.payments.length > 0) {
+            <div class="folio-section-title folio-section-title--payments">Payments</div>
+            @for (p of f.payments; track p.id) {
+              <div class="folio-row folio-row--payment">
+                <div class="folio-row__left">
+                  <div class="folio-desc">{{ payMethodLabel(p.method) }}</div>
+                  <div class="folio-meta">
+                    <span>{{ p.date | date:'MMM d, HH:mm' }}</span>
+                    @if (p.reference) { <span class="folio-ref">{{ p.reference }}</span> }
+                  </div>
+                </div>
+                <div class="folio-amt folio-amt--pay">−{{ p.amount | currency:'GEL':'symbol-narrow':'1.2-2' }}</div>
+              </div>
+            }
+          }
+        </div>
+
+        <div class="totals-card">
+          <div class="totals-row">
+            <span>Subtotal</span>
+            <span>{{ reservation().totalRoomCharge + reservation().totalExtras | currency:'GEL':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+          <div class="totals-row">
+            <span>Tax</span>
+            <span>{{ reservation().totalTax | currency:'GEL':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+          <div class="totals-row totals-row--total">
+            <span>Total</span>
+            <span>{{ reservation().totalAmount | currency:'GEL':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+          <div class="totals-row">
+            <span>Paid</span>
+            <span>−{{ reservation().totalPaid | currency:'GEL':'symbol-narrow':'1.2-2' }}</span>
+          </div>
+          <div class="totals-row totals-row--balance">
+            <span>Balance due</span>
+            <span [class.balance-owed]="reservation().balance > 0" [class.balance-ok]="reservation().balance <= 0">
+              {{ reservation().balance | currency:'GEL':'symbol-narrow':'1.2-2' }}
+            </span>
+          </div>
+        </div>
+      } @else {
+        <div class="loading">Loading folio…</div>
+      }
+    }
+
+    @if (step() === 2) {
+      <!-- Step 2: Settle balance -->
+      <h3 class="step-title">Settle balance</h3>
+
+      @if (reservation().balance > 0) {
+        <p class="step-help">
+          Outstanding balance is <strong>{{ reservation().balance | currency:'GEL':'symbol-narrow':'1.2-2' }}</strong>.
+          Collect payment to clear it.
+        </p>
+
+        <div class="pay-row">
+          <label class="field field--grow">
+            <span class="field-lbl">Amount</span>
+            <input
+              class="field-input"
+              type="number"
+              min="0"
+              [ngModel]="paymentAmount()"
+              (ngModelChange)="paymentAmount.set($event)" />
+          </label>
+          <label class="field">
+            <span class="field-lbl">Method</span>
+            <select class="field-input" [ngModel]="paymentMethod()" (ngModelChange)="paymentMethod.set($event)">
+              <option [value]="PaymentMethod.Card">Card</option>
+              <option [value]="PaymentMethod.Cash">Cash</option>
+              <option [value]="PaymentMethod.BankTransfer">Bank transfer</option>
+              <option [value]="PaymentMethod.Voucher">Voucher</option>
+            </select>
+          </label>
+        </div>
+        <div class="quick-pay">
+          <button class="qp-btn" (click)="paymentAmount.set(reservation().balance)">Full balance</button>
+          <button class="qp-btn" (click)="paymentAmount.set(0)">Skip / settle later</button>
+        </div>
+
+        @if (paymentAmount() > 0 && paymentAmount() < reservation().balance) {
+          <div class="warn-banner">
+            <svg width="14" height="14" viewBox="0 0 14 14"><path d="M7 1.5L13 12H1L7 1.5zM7 5v3M7 10v.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>
+            <span>Remaining balance of {{ reservation().balance - paymentAmount() | currency:'GEL':'symbol-narrow':'1.2-2' }} will stay open after check-out.</span>
+          </div>
+        }
+      } @else {
+        <div class="ok-banner">
+          <svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" fill="var(--success)"/><path d="M6 10l3 3 5-6" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+          <div>
+            <div class="ok-title">Balance fully settled</div>
+            <div class="ok-sub">No outstanding payment required.</div>
+          </div>
+        </div>
+      }
+
+      <label class="checkbox-row">
+        <input type="checkbox" [ngModel]="emailReceipt()" (ngModelChange)="emailReceipt.set($event)" />
+        <span>Email receipt to {{ guest()?.email || 'guest' }}</span>
+      </label>
+    }
+
+    @if (step() === 3) {
+      <!-- Step 3: Confirm -->
+      <h3 class="step-title">Confirm check-out</h3>
+
+      <div class="summary">
+        <div class="summary-row">
+          <span>Guest</span>
+          <span class="summary-val">{{ guest()?.firstName }} {{ guest()?.lastName }}</span>
+        </div>
+        <div class="summary-row">
+          <span>Stay</span>
+          <span class="summary-val">
+            {{ reservation().checkIn | date:'MMM d' }}
+            <span class="arrow">→</span>
+            {{ reservation().checkOut | date:'MMM d, y' }} ({{ reservation().nights }}n)
+          </span>
+        </div>
+        @if (paymentAmount() > 0) {
+          <div class="summary-row">
+            <span>Final payment</span>
+            <span class="summary-val">{{ paymentAmount() | currency:'GEL':'symbol-narrow':'1.2-2' }} ({{ payMethodLabel(paymentMethod()) }})</span>
+          </div>
+        }
+        <div class="summary-row summary-row--total">
+          <span>Final balance</span>
+          <span class="summary-val" [class.balance-owed]="finalBalance() > 0" [class.balance-ok]="finalBalance() <= 0">
+            {{ finalBalance() | currency:'GEL':'symbol-narrow':'1.2-2' }}
+          </span>
+        </div>
+      </div>
+
+      <div class="info-banner">
+        <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.4" fill="none"/><path d="M7 6.5v3.5M7 4v.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        <span>Room {{ assignedRoom() }} will be marked as <strong>cleaning</strong> and added to today's housekeeping queue.</span>
+      </div>
+
+      <label class="field">
+        <span class="field-lbl">Notes (optional)</span>
+        <textarea
+          class="field-input"
+          rows="2"
+          placeholder="Late checkout, breakage report, follow-up needed, etc."
+          [ngModel]="notes()"
+          (ngModelChange)="notes.set($event)"></textarea>
+      </label>
+    }
+
+  </div>
+
+  <footer class="wiz-foot">
+    <button class="btn-back" (click)="back()" [disabled]="step() === 1 || submitting()">Back</button>
+    <div class="foot-right">
+      @if (step() < 3) {
+        <button class="btn-next" (click)="next()">Next</button>
+      } @else {
+        <button class="btn-confirm" [disabled]="submitting() || !canSubmit()" (click)="submit()">
+          @if (submitting()) { <span class="spinner"></span> } @else { Confirm check-out }
+        </button>
+      }
+    </div>
+  </footer>
+</div>

@@ -1,0 +1,292 @@
+<div class="hk-page">
+
+  <!-- ── TOP HEADER ─────────────────────────────────────── -->
+  <header class="hk-header">
+    <div class="hk-title-block">
+      <div class="hk-icon-wrap">
+        <span class="hk-icon">🧹</span>
+      </div>
+      <div>
+        <h1 class="hk-title">Housekeeping</h1>
+        <p class="hk-sub">{{ today | date:'EEEE, MMMM d' }} · {{ propertyCtx.active()?.name }}</p>
+      </div>
+    </div>
+
+    <div class="hk-toolbar">
+      <div class="search-box">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M11 11l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <input type="text" placeholder="Search room…" [ngModel]="search()" (ngModelChange)="search.set($event)" class="search-input" />
+      </div>
+      <select class="filter-select" [ngModel]="filterAssignee()" (ngModelChange)="filterAssignee.set($event)">
+        <option value="">All Staff</option>
+        @for (s of housekeepers(); track s.id) {
+          <option [value]="s.id">{{ s.firstName }} {{ s.lastName }}</option>
+        }
+      </select>
+      <select class="filter-select" [ngModel]="filterPriority()" (ngModelChange)="filterPriority.set($event)">
+        <option value="">All Priority</option>
+        <option value="high">High</option>
+        <option value="normal">Normal</option>
+        <option value="low">Low</option>
+      </select>
+    </div>
+  </header>
+
+  <!-- ── KPI STRIP ──────────────────────────────────────── -->
+  <div class="kpi-strip">
+    @for (col of columns; track col.status) {
+      <button class="kpi-tile" [class.active]="colFilter() === col.status"
+              (click)="toggleColFilter(col.status)"
+              [style.--col-color]="col.color" [style.--col-bg]="col.bg">
+        <span class="kpi-count">{{ countByStatus(col.status) }}</span>
+        <span class="kpi-label">{{ col.label }}</span>
+        <span class="kpi-bar" [style.background]="col.color"></span>
+      </button>
+    }
+    <div class="kpi-tile kpi-total">
+      <span class="kpi-count">{{ tasks().length }}</span>
+      <span class="kpi-label">Total</span>
+    </div>
+  </div>
+
+  <!-- ── KANBAN BOARD ───────────────────────────────────── -->
+  @if (loading()) {
+    <div class="skeleton-board">
+      @for (_ of [1,2,3,4]; track $index) {
+        <div class="skeleton-col">
+          <div class="skel skel-head"></div>
+          @for (__ of [1,2,3]; track $index) {
+            <div class="skel skel-card"></div>
+          }
+        </div>
+      }
+    </div>
+  } @else {
+    <div class="kanban-board">
+      @for (col of visibleColumns(); track col.status) {
+        <div class="kanban-col">
+
+          <!-- column header -->
+          <div class="col-header" [style.--col-color]="col.color">
+            <div class="col-header-left">
+              <span class="col-dot" [style.background]="col.color"></span>
+              <span class="col-label">{{ col.label }}</span>
+            </div>
+            <span class="col-count" [style.background]="col.bg" [style.color]="col.color">
+              {{ filteredByCol(col.status).length }}
+            </span>
+          </div>
+
+          <!-- cards -->
+          <div class="col-body">
+            @if (filteredByCol(col.status).length === 0) {
+              <div class="col-empty">
+                <span class="col-empty-icon">{{ col.icon }}</span>
+                <span>No rooms</span>
+              </div>
+            }
+            @for (task of filteredByCol(col.status); track task.id) {
+              <button class="task-card"
+                      [class.selected]="selectedTask()?.id === task.id"
+                      (click)="selectTask(task)">
+                <div class="card-top">
+                  <span class="card-room">Room {{ roomNumber(task.roomId) }}</span>
+                  <span class="priority-dot"
+                        [style.background]="PRIORITY_META[task.priority]?.dot ?? '#9CA3AF'"
+                        [title]="task.priority"></span>
+                </div>
+                <div class="card-sub">Floor {{ roomFloor(task.roomId) }}</div>
+
+                @if (task.assignedTo) {
+                  <div class="card-assignee">
+                    <span class="avatar-xs">{{ staffInitials(task.assignedTo) }}</span>
+                    <span class="assignee-name">{{ staffName(task.assignedTo) }}</span>
+                  </div>
+                } @else {
+                  <div class="card-unassigned">Unassigned</div>
+                }
+
+                <!-- live timer for in-progress -->
+                @if (task.status === HkStatus.InProgress && task.startedAt) {
+                  <div class="card-timer">
+                    <span class="timer-dot"></span>
+                    {{ elapsedTime(task) }}
+                  </div>
+                }
+
+                <!-- completed duration -->
+                @if (task.durationMinutes && task.status !== HkStatus.InProgress) {
+                  <div class="card-duration">
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                      <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
+                      <path d="M8 4v4l3 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    {{ task.durationMinutes }}m
+                  </div>
+                }
+              </button>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- ── TASK DETAIL DRAWER ─────────────────────────────── -->
+  @if (selectedTask()) {
+    <div class="drawer-overlay" (click)="closeDrawer()"></div>
+    <aside class="task-drawer" [class.open]="selectedTask() !== null">
+      <div class="drawer-head">
+        <div>
+          <div class="drawer-room">Room {{ roomNumber(selectedTask()!.roomId) }}</div>
+          <div class="drawer-floor">Floor {{ roomFloor(selectedTask()!.roomId) }} · {{ selectedTask()!.priority }} priority</div>
+        </div>
+        <button class="drawer-close" (click)="closeDrawer()">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+            <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- status pill row -->
+      <div class="drawer-status-row">
+        @for (col of columns; track col.status) {
+          <button class="status-pill"
+                  [class.active]="selectedTask()!.status === col.status"
+                  [style.--pill-color]="col.color"
+                  [style.--pill-bg]="col.bg"
+                  (click)="changeStatus(col.status)"
+                  [disabled]="actionBusy()">
+            {{ col.label }}
+          </button>
+        }
+      </div>
+
+      <!-- assign -->
+      <div class="drawer-section">
+        <label class="field-label">Assigned To</label>
+        <select class="field-select"
+                [ngModel]="selectedTask()!.assignedTo ?? ''"
+                (ngModelChange)="assignStaff($event)"
+                [disabled]="actionBusy()">
+          <option value="">— Unassigned —</option>
+          @for (s of housekeepers(); track s.id) {
+            <option [value]="s.id">{{ s.firstName }} {{ s.lastName }}</option>
+          }
+        </select>
+      </div>
+
+      <!-- timer control -->
+      <div class="drawer-section">
+        <label class="field-label">Timer</label>
+        <div class="timer-block">
+          @if (selectedTask()!.status === HkStatus.InProgress && selectedTask()!.startedAt) {
+            <div class="timer-display">
+              <span class="timer-dot pulsing"></span>
+              <span class="timer-value">{{ elapsedTime(selectedTask()!) }}</span>
+              <span class="timer-since">since {{ selectedTask()!.startedAt | date:'HH:mm' }}</span>
+            </div>
+            <button class="btn-stop" (click)="completeTask()" [disabled]="actionBusy()">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <rect x="4" y="4" width="8" height="8" rx="1" fill="currentColor"/>
+              </svg>
+              Mark Clean
+            </button>
+          } @else if (selectedTask()!.status === HkStatus.Dirty || selectedTask()!.status === HkStatus.Clean) {
+            <button class="btn-start" (click)="startTask()" [disabled]="actionBusy() || !selectedTask()!.assignedTo">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M5 3l8 5-8 5V3z" fill="currentColor"/>
+              </svg>
+              {{ selectedTask()!.status === HkStatus.Dirty ? 'Start Cleaning' : 'Re-open' }}
+            </button>
+            @if (!selectedTask()!.assignedTo) {
+              <span class="timer-hint">Assign staff first</span>
+            }
+          } @else if (selectedTask()!.status === HkStatus.Clean) {
+            <button class="btn-inspect" (click)="inspectTask()" [disabled]="actionBusy()">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M3 8l4 4 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Mark Inspected
+            </button>
+          } @else if (selectedTask()!.status === HkStatus.Inspected) {
+            <div class="inspect-done">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M3 8l4 4 6-7" stroke="#16A34A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Inspected at {{ selectedTask()!.inspectedAt | date:'HH:mm' }}
+            </div>
+          }
+          @if (selectedTask()!.durationMinutes) {
+            <div class="duration-badge">{{ selectedTask()!.durationMinutes }}m total</div>
+          }
+        </div>
+      </div>
+
+      <!-- quick actions for Clean status -->
+      @if (selectedTask()!.status === HkStatus.Clean) {
+        <div class="drawer-section">
+          <button class="btn-inspect" style="width:100%" (click)="inspectTask()" [disabled]="actionBusy()">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8l4 4 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Mark as Inspected
+          </button>
+        </div>
+      }
+
+      <!-- photo upload mockup -->
+      <div class="drawer-section">
+        <label class="field-label">Photos</label>
+        <div class="photo-upload-zone" (click)="mockPhotoUpload()">
+          @if (mockPhotos().length === 0) {
+            <div class="photo-placeholder">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <rect x="3" y="6" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                <circle cx="12" cy="13" r="3" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M8 6V5a2 2 0 012-2h4a2 2 0 012 2v1" stroke="currentColor" stroke-width="1.5"/>
+              </svg>
+              <span>Tap to add photos</span>
+            </div>
+          } @else {
+            <div class="photo-grid">
+              @for (p of mockPhotos(); track $index) {
+                <div class="photo-thumb" [style.background]="p"></div>
+              }
+              <div class="photo-add">+</div>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- notes -->
+      <div class="drawer-section">
+        <label class="field-label">Notes</label>
+        <textarea class="field-textarea"
+                  [(ngModel)]="notesDraft"
+                  placeholder="Add notes about room condition…"
+                  rows="3"></textarea>
+        @if (notesDraft !== (selectedTask()!.notes ?? '')) {
+          <button class="btn-save-notes" (click)="saveNotes()" [disabled]="actionBusy()">Save Notes</button>
+        }
+      </div>
+
+      <!-- scheduled -->
+      <div class="drawer-section drawer-meta">
+        <div class="meta-row">
+          <span class="meta-label">Scheduled</span>
+          <span class="meta-val">{{ selectedTask()!.scheduledFor | date:'MMM d, HH:mm' }}</span>
+        </div>
+        @if (selectedTask()!.completedAt) {
+          <div class="meta-row">
+            <span class="meta-label">Completed</span>
+            <span class="meta-val">{{ selectedTask()!.completedAt | date:'HH:mm' }}</span>
+          </div>
+        }
+      </div>
+    </aside>
+  }
+</div>

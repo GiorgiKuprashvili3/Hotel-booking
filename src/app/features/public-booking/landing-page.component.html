@@ -1,0 +1,230 @@
+<!-- ══════════ HERO ══════════ -->
+<section class="hero">
+  <div class="hero-bg"
+       [style.backgroundImage]="'url(https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1800&q=80)'">
+  </div>
+  <div class="hero-overlay"></div>
+
+  <div class="hero-inner">
+    <span class="hero-eyebrow">Tbilisi, Georgia · 5★</span>
+    <h1 class="hero-title">A grand hotel,<br/>rewritten for now.</h1>
+    <p class="hero-sub">
+      On Rustaveli Avenue at the foot of Mtatsminda, The Aurora pairs
+      century-old craft with the rhythm of a modern city stay.
+    </p>
+
+    <!-- Hero booking widget -->
+    <form class="hero-search"
+          (ngSubmit)="searchAvailability()"
+          aria-label="Check availability">
+      <div class="field">
+        <label for="hero-checkin">Check in</label>
+        <input id="hero-checkin"
+               type="date"
+               [min]="todayIso"
+               [(ngModel)]="checkIn"
+               name="checkIn" />
+      </div>
+      <div class="field">
+        <label for="hero-checkout">Check out</label>
+        <input id="hero-checkout"
+               type="date"
+               [min]="minCheckoutIso()"
+               [(ngModel)]="checkOut"
+               name="checkOut" />
+      </div>
+      <div class="field">
+        <label for="hero-guests">Guests</label>
+        <select id="hero-guests" [(ngModel)]="guests" name="guests">
+          <option [ngValue]="1">1 guest</option>
+          <option [ngValue]="2">2 guests</option>
+          <option [ngValue]="3">3 guests</option>
+          <option [ngValue]="4">4 guests</option>
+        </select>
+      </div>
+      <button type="submit" class="hero-cta">
+        <mat-icon aria-hidden="true">search</mat-icon>
+        Check availability
+      </button>
+    </form>
+  </div>
+</section>
+
+<!-- ══════════ INTRO ══════════ -->
+<section class="intro section">
+  <div class="intro-stat">
+    <span class="num">2018</span>
+    <span class="lbl">Year built</span>
+  </div>
+  <div class="intro-stat">
+    <span class="num">80</span>
+    <span class="lbl">Rooms &amp; suites</span>
+  </div>
+  <div class="intro-stat">
+    <span class="num">9.4</span>
+    <span class="lbl">Guest rating</span>
+  </div>
+  <div class="intro-stat">
+    <span class="num">5★</span>
+    <span class="lbl">Forbes Travel Guide</span>
+  </div>
+</section>
+
+<!-- ══════════ ROOMS ══════════ -->
+<section id="rooms" class="section">
+  <header class="section-header">
+    <span class="eyebrow">Accommodations</span>
+    <h2>Rooms &amp; suites</h2>
+    <p>Five room categories, each finished with linen by Frette,
+       a deep soaking bath and a private balcony or terrace.</p>
+  </header>
+
+  @if (loading()) {
+    <div class="room-grid">
+      @for (i of [1,2,3]; track i) {
+        <article class="room-card is-loading">
+          <lux-skeleton height="220px" radius="var(--radius-lg) var(--radius-lg) 0 0" />
+          <div class="room-card-body">
+            <lux-skeleton width="60%" height="22px" />
+            <lux-skeleton width="40%" height="14px" />
+            <lux-skeleton width="100%" height="14px" />
+            <lux-skeleton width="80%" height="14px" />
+          </div>
+        </article>
+      }
+    </div>
+  } @else if (error()) {
+    <div class="surface error-surface" role="alert">
+      <mat-icon>error_outline</mat-icon>
+      <div>
+        <strong>We couldn't load rooms.</strong>
+        <p>Please try again — or call the front desk on +995 32 200 1000.</p>
+      </div>
+      <button mat-stroked-button (click)="loadRoomTypes()">Retry</button>
+    </div>
+  } @else {
+    <div class="room-grid">
+      @for (rt of roomTypes(); track rt.id) {
+        <article class="room-card">
+          <div class="room-photo">
+            <img [src]="imageFor(rt)"
+                 [alt]="rt.name + ' room photograph'"
+                 loading="lazy" />
+            <span class="room-badge">From ₾{{ rt.basePrice }}/night</span>
+          </div>
+          <div class="room-card-body">
+            <h3>{{ rt.name }}</h3>
+            <div class="room-meta">
+              <span><mat-icon aria-hidden="true">bed</mat-icon> {{ rt.bedConfiguration }}</span>
+              <span><mat-icon aria-hidden="true">straighten</mat-icon> {{ rt.sizeSqm }} m²</span>
+              <span><mat-icon aria-hidden="true">people</mat-icon> {{ rt.maxOccupancy }} guests</span>
+            </div>
+            <p class="room-desc">{{ rt.description }}</p>
+            @if (rt.amenities.length) {
+              <ul class="room-amenities">
+                @for (a of rt.amenities.slice(0, 4); track a) {
+                  <li>{{ a }}</li>
+                }
+              </ul>
+            }
+            <a mat-flat-button color="primary"
+               [routerLink]="['/book/reserve']"
+               [queryParams]="{ roomType: rt.id }">
+              Reserve {{ rt.name }}
+            </a>
+          </div>
+        </article>
+      }
+    </div>
+  }
+</section>
+
+<!-- ══════════ AMENITIES ══════════ -->
+<section id="amenities" class="section section-tinted">
+  <header class="section-header">
+    <span class="eyebrow">The property</span>
+    <h2>What's on offer</h2>
+    <p>Everything you'd expect of a five-star, and several things you wouldn't.</p>
+  </header>
+
+  <div class="amenities-grid">
+    @for (a of amenities; track a.title) {
+      <div class="amenity-card">
+        <div class="amenity-icon" aria-hidden="true">
+          <mat-icon>{{ a.icon }}</mat-icon>
+        </div>
+        <h3>{{ a.title }}</h3>
+        <p>{{ a.body }}</p>
+      </div>
+    }
+  </div>
+</section>
+
+<!-- ══════════ GALLERY ══════════ -->
+<section id="gallery" class="section">
+  <header class="section-header">
+    <span class="eyebrow">Spaces</span>
+    <h2>Gallery</h2>
+    <p>The lobby, the rooftop, a corner suite at dusk.</p>
+  </header>
+
+  <div class="gallery-grid">
+    @for (img of gallery; track img; let i = $index) {
+      <button type="button"
+              class="gallery-tile"
+              [class.tall]="i === 0 || i === 3"
+              (click)="openLightbox(i)"
+              [attr.aria-label]="'Open photo ' + (i + 1) + ' of ' + gallery.length">
+        <img [src]="img"
+             [alt]="'Aurora Tbilisi — gallery photograph ' + (i + 1)"
+             loading="lazy" />
+      </button>
+    }
+  </div>
+
+  @if (lightboxIndex() !== null) {
+    <div class="lightbox"
+         role="dialog"
+         aria-modal="true"
+         aria-label="Photo viewer"
+         (click)="closeLightbox()"
+         (keydown.escape)="closeLightbox()"
+         tabindex="-1">
+      <button type="button"
+              class="lightbox-close"
+              (click)="closeLightbox(); $event.stopPropagation()"
+              aria-label="Close photo viewer">
+        <mat-icon>close</mat-icon>
+      </button>
+      <button type="button"
+              class="lightbox-nav prev"
+              (click)="prevPhoto(); $event.stopPropagation()"
+              aria-label="Previous photo">
+        <mat-icon>chevron_left</mat-icon>
+      </button>
+      <img [src]="gallery[lightboxIndex()!]"
+           [alt]="'Gallery photo ' + (lightboxIndex()! + 1)"
+           (click)="$event.stopPropagation()" />
+      <button type="button"
+              class="lightbox-nav next"
+              (click)="nextPhoto(); $event.stopPropagation()"
+              aria-label="Next photo">
+        <mat-icon>chevron_right</mat-icon>
+      </button>
+      <div class="lightbox-counter">{{ lightboxIndex()! + 1 }} / {{ gallery.length }}</div>
+    </div>
+  }
+</section>
+
+<!-- ══════════ CTA ══════════ -->
+<section id="contact" class="section cta-section">
+  <div class="cta-card">
+    <h2>Plan your stay</h2>
+    <p>Book directly for our best available rate, room upgrades when available,
+       and complimentary breakfast for two.</p>
+    <div class="cta-actions">
+      <a mat-flat-button color="primary" routerLink="/book/reserve">Book a stay</a>
+      <a mat-stroked-button href="tel:+995322001000">Call +995 32 200 1000</a>
+    </div>
+  </div>
+</section>

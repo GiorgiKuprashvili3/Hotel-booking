@@ -1,0 +1,227 @@
+<div class="wiz-backdrop" (click)="cancel.emit()"></div>
+<div class="wiz" role="dialog" aria-modal="true" aria-label="Check in" [@fade]>
+
+  <!-- Header -->
+  <header class="wiz-head">
+    <div>
+      <h2 class="wiz-title">Check in guest</h2>
+      <p class="wiz-sub">{{ reservation().confirmationNumber }} · {{ guest()?.firstName }} {{ guest()?.lastName }}</p>
+    </div>
+    <button class="btn-close" (click)="cancel.emit()" aria-label="Close">
+      <svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 3l8 8M11 3L3 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+  </header>
+
+  <!-- Stepper -->
+  <div class="stepper">
+    @for (s of steps; track s.n; let i = $index) {
+      <div class="step"
+           [class.active]="step() === s.n"
+           [class.done]="step() > s.n">
+        <span class="step-dot">
+          @if (step() > s.n) {
+            <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 5l2 2 4-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+          } @else {
+            {{ s.n }}
+          }
+        </span>
+        <span class="step-label">{{ s.label }}</span>
+        @if (i < steps.length - 1) {
+          <span class="step-line"></span>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- Step content -->
+  <div class="wiz-body">
+
+    @if (step() === 1) {
+      <!-- Step 1: Verify guest -->
+      <h3 class="step-title">Verify guest identity</h3>
+      <p class="step-help">Confirm the guest's ID matches the reservation. This is for the front-desk audit log.</p>
+      <div class="guest-card">
+        <div class="guest-avatar">{{ initials() }}</div>
+        <div class="guest-info">
+          <div class="guest-name">{{ guest()?.firstName }} {{ guest()?.lastName }}</div>
+          <div class="guest-meta">{{ guest()?.email }} · {{ guest()?.phone }}</div>
+          <div class="guest-id">
+            <span class="id-label">{{ guest()?.idType | titlecase }}:</span>
+            <span class="id-num">{{ guest()?.idNumber || 'Not on file' }}</span>
+          </div>
+        </div>
+      </div>
+      <label class="checkbox-row">
+        <input type="checkbox" [ngModel]="idVerified()" (ngModelChange)="idVerified.set($event)" />
+        <span>I have verified the guest's identity document</span>
+      </label>
+    }
+
+    @if (step() === 2) {
+      <!-- Step 2: Assign room -->
+      <h3 class="step-title">Assign a room</h3>
+      <p class="step-help">
+        Suggested rooms match the reservation's type ({{ reservation().roomTypeId }}) and are currently available.
+      </p>
+
+      @if (loadingRooms()) {
+        <div class="loading">Loading rooms…</div>
+      } @else if (eligibleRooms().length === 0) {
+        <div class="empty-pane">
+          <p>No matching rooms are immediately available.</p>
+          <p class="empty-hint">Showing all available rooms instead:</p>
+          <div class="room-pick">
+            @for (r of allAvailable(); track r.id) {
+              <button
+                class="room-btn"
+                [class.selected]="selectedRoomId() === r.id"
+                (click)="selectedRoomId.set(r.id)">
+                <span class="rb-num">{{ r.number }}</span>
+                <span class="rb-floor">Floor {{ r.floor }}</span>
+              </button>
+            }
+          </div>
+        </div>
+      } @else {
+        <div class="room-pick">
+          @for (r of eligibleRooms(); track r.id) {
+            <button
+              class="room-btn"
+              [class.selected]="selectedRoomId() === r.id"
+              (click)="selectedRoomId.set(r.id)">
+              <span class="rb-num">{{ r.number }}</span>
+              <span class="rb-floor">Floor {{ r.floor }}</span>
+            </button>
+          }
+        </div>
+        @if (allAvailable().length > eligibleRooms().length) {
+          <details class="other-rooms">
+            <summary>Show {{ allAvailable().length - eligibleRooms().length }} other available rooms</summary>
+            <div class="room-pick room-pick--secondary">
+              @for (r of otherAvailable(); track r.id) {
+                <button
+                  class="room-btn"
+                  [class.selected]="selectedRoomId() === r.id"
+                  (click)="selectedRoomId.set(r.id)">
+                  <span class="rb-num">{{ r.number }}</span>
+                  <span class="rb-floor">Floor {{ r.floor }}</span>
+                </button>
+              }
+            </div>
+          </details>
+        }
+      }
+
+      <label class="field">
+        <span class="field-lbl">Key cards to issue</span>
+        <div class="counter">
+          <button class="counter-btn" (click)="keyCards.set(Math.max(0, keyCards() - 1))">−</button>
+          <span class="counter-val">{{ keyCards() }}</span>
+          <button class="counter-btn" (click)="keyCards.set(Math.min(4, keyCards() + 1))">+</button>
+        </div>
+      </label>
+    }
+
+    @if (step() === 3) {
+      <!-- Step 3: Payment & confirm -->
+      <h3 class="step-title">Payment & confirmation</h3>
+
+      <div class="summary">
+        <div class="summary-row">
+          <span>Guest</span>
+          <span class="summary-val">{{ guest()?.firstName }} {{ guest()?.lastName }}</span>
+        </div>
+        <div class="summary-row">
+          <span>Stay</span>
+          <span class="summary-val">
+            {{ reservation().checkIn | date:'MMM d' }}
+            <span class="arrow">→</span>
+            {{ reservation().checkOut | date:'MMM d, y' }}
+            ({{ reservation().nights }}n)
+          </span>
+        </div>
+        <div class="summary-row">
+          <span>Room</span>
+          <span class="summary-val">{{ assignedRoomLabel() }}</span>
+        </div>
+        <div class="summary-row summary-row--total">
+          <span>Total amount</span>
+          <span class="summary-val">{{ reservation().totalAmount | currency:'GEL':'symbol-narrow':'1.0-0' }}</span>
+        </div>
+        <div class="summary-row summary-row--bal">
+          <span>Balance due</span>
+          <span class="summary-val balance">{{ reservation().balance | currency:'GEL':'symbol-narrow':'1.0-0' }}</span>
+        </div>
+      </div>
+
+      @if (reservation().balance > 0) {
+        <div class="payment-section">
+          <h4 class="payment-title">Collect payment (optional)</h4>
+          <div class="pay-row">
+            <label class="field field--grow">
+              <span class="field-lbl">Amount</span>
+              <input
+                class="field-input"
+                type="number"
+                min="0"
+                [max]="reservation().balance"
+                [ngModel]="paymentAmount()"
+                (ngModelChange)="paymentAmount.set($event)" />
+            </label>
+            <label class="field">
+              <span class="field-lbl">Method</span>
+              <select class="field-input" [ngModel]="paymentMethod()" (ngModelChange)="paymentMethod.set($event)">
+                <option [value]="PaymentMethod.Card">Card</option>
+                <option [value]="PaymentMethod.Cash">Cash</option>
+                <option [value]="PaymentMethod.BankTransfer">Bank transfer</option>
+                <option [value]="PaymentMethod.Voucher">Voucher</option>
+              </select>
+            </label>
+          </div>
+          <div class="quick-pay">
+            <button class="qp-btn" (click)="paymentAmount.set(reservation().balance)">Full balance</button>
+            <button class="qp-btn" (click)="paymentAmount.set(0)">Skip</button>
+          </div>
+        </div>
+      }
+
+      <label class="field">
+        <span class="field-lbl">Notes (optional)</span>
+        <textarea
+          class="field-input"
+          rows="2"
+          placeholder="Special arrangements, early arrival reason, etc."
+          [ngModel]="notes()"
+          (ngModelChange)="notes.set($event)"></textarea>
+      </label>
+    }
+
+  </div>
+
+  <!-- Footer -->
+  <footer class="wiz-foot">
+    <button
+      class="btn-back"
+      (click)="back()"
+      [disabled]="step() === 1 || submitting()">
+      Back
+    </button>
+    <div class="foot-right">
+      @if (step() < 3) {
+        <button
+          class="btn-next"
+          [disabled]="!canNext()"
+          (click)="next()">
+          Next
+        </button>
+      } @else {
+        <button
+          class="btn-confirm"
+          [disabled]="!canSubmit() || submitting()"
+          (click)="submit()">
+          @if (submitting()) { <span class="spinner"></span> } @else { Confirm check-in }
+        </button>
+      }
+    </div>
+  </footer>
+</div>

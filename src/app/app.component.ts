@@ -1,14 +1,11 @@
 import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
-import { ToastHostComponent } from './shared/components/toast-host.component';
+import { ToastHostComponent } from './shared/components/toast-host/toast-host.component';
 
 @Component({
   selector: 'lux-root',
   standalone: true,
   imports: [RouterOutlet, ToastHostComponent],
-  template: `
-    <router-outlet></router-outlet>
-    <lux-toast-host />
-  `,
+  templateUrl: './app.component.html',
 })
 export class AppComponent {}

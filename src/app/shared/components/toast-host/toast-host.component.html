@@ -1,0 +1,24 @@
+<div class="toast-stack" role="region" aria-label="Notifications" aria-live="polite">
+  @for (t of svc.toasts(); track t.id) {
+    <div class="toast" [attr.data-tone]="t.tone" role="status">
+      <mat-icon class="toast-icon" aria-hidden="true">{{ iconFor(t.tone) }}</mat-icon>
+      <div class="toast-body">
+        <div class="toast-title">{{ t.title }}</div>
+        @if (t.message) { <div class="toast-message">{{ t.message }}</div> }
+      </div>
+      @if (t.action) {
+        <button type="button"
+                class="toast-action"
+                (click)="t.action!.handler(); svc.dismiss(t.id)">
+          {{ t.action.label }}
+        </button>
+      }
+      <button type="button"
+              class="toast-close"
+              (click)="svc.dismiss(t.id)"
+              aria-label="Dismiss notification">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+  }
+</div>

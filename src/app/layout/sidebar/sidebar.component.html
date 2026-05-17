@@ -1,0 +1,37 @@
+<aside class="sidebar" [class.collapsed]="collapsed()" [class.open]="layout.mobileOpen()">
+  <div class="logo">
+    <div class="logo-mark">L</div>
+    @if (!collapsed()) {
+      <div class="logo-text">
+        <span class="logo-name">LuxStay</span>
+        <span class="logo-tag">Collection</span>
+      </div>
+    }
+  </div>
+
+  <nav class="nav">
+    @for (group of groups; track group.title) {
+      @if (!collapsed() && group.title) {
+        <div class="nav-group-title">{{ group.title }}</div>
+      }
+      @if (collapsed() && $index > 0) { <div class="nav-divider"></div> }
+
+      @for (item of group.items; track item.link) {
+        <a *hasRole="item.roles ?? []"
+           [routerLink]="item.link"
+           routerLinkActive="active"
+           class="nav-item"
+           (click)="layout.closeMobile()"
+           [matTooltip]="collapsed() ? item.label : ''"
+           matTooltipPosition="right">
+          <mat-icon>{{ item.icon }}</mat-icon>
+          @if (!collapsed()) { <span class="nav-label">{{ item.label }}</span> }
+        </a>
+      }
+    }
+  </nav>
+
+  <button class="collapse-btn" (click)="toggle()" [matTooltip]="collapsed() ? 'Expand' : 'Collapse'" matTooltipPosition="right">
+    <mat-icon>{{ collapsed() ? 'chevron_right' : 'chevron_left' }}</mat-icon>
+  </button>
+</aside>

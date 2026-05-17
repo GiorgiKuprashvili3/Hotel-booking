@@ -1,0 +1,328 @@
+<div class="rooms-page">
+
+  <!-- Header -->
+  <header class="rooms-header">
+    <div>
+      <h1 class="page-title">Rooms</h1>
+      <p class="page-sub">{{ propertyCtx.active()?.name }} · {{ rooms().length }} rooms</p>
+    </div>
+
+    <div class="view-switch">
+      <button
+        class="view-tab"
+        [class.active]="view() === 'map'"
+        (click)="view.set('map')">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/>
+          <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/>
+          <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/>
+          <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+        Map
+      </button>
+      <button
+        class="view-tab"
+        [class.active]="view() === 'table'"
+        (click)="view.set('table')">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        List
+      </button>
+    </div>
+  </header>
+
+  <!-- Legend -->
+  <div class="legend">
+    @for (s of statusList; track s) {
+      <div class="legend-item">
+        <span class="legend-dot" [style.background]="meta(s).color"></span>
+        <span>{{ meta(s).label }}</span>
+        <span class="legend-count">{{ countByStatus(s) }}</span>
+      </div>
+    }
+  </div>
+
+  @if (loading()) {
+    <div class="loading">Loading rooms…</div>
+  } @else {
+
+    <!-- Map view -->
+    @if (view() === 'map') {
+      <div class="floor-list">
+        @for (group of floorGroups(); track group.floor) {
+          <section class="floor-block">
+            <div class="floor-header">
+              <h3 class="floor-title">Floor {{ group.floor }}</h3>
+              <span class="floor-count">{{ group.rooms.length }} rooms</span>
+            </div>
+            <div class="room-grid">
+              @for (r of group.rooms; track r.id) {
+                <button
+                  class="room-tile"
+                  [style.background]="meta(r.status).bg"
+                  [style.border-color]="meta(r.status).color"
+                  (click)="selectRoom(r)"
+                  [title]="meta(r.status).label">
+                  <span class="room-num">{{ r.number }}</span>
+                  <span class="room-type">{{ typeName(r.roomTypeId) }}</span>
+                  <span class="room-state" [style.color]="meta(r.status).color">
+                    {{ meta(r.status).label }}
+                  </span>
+                </button>
+              }
+            </div>
+          </section>
+        }
+      </div>
+    }
+
+    <!-- Table view -->
+    @if (view() === 'table') {
+      <div class="table-wrap">
+
+        <!-- Toolbar -->
+        <div class="table-toolbar">
+          <div class="table-filters">
+            <input
+              class="filter-input"
+              type="search"
+              placeholder="Search room number…"
+              [ngModel]="tableSearch()"
+              (ngModelChange)="tableSearch.set($event)" />
+            <select
+              class="filter-select"
+              [ngModel]="tableStatusFilter()"
+              (ngModelChange)="tableStatusFilter.set($event)">
+              <option value="">All statuses</option>
+              @for (s of statusList; track s) {
+                <option [value]="s">{{ meta(s).label }}</option>
+              }
+            </select>
+          </div>
+          <div class="bulk-actions">
+            <span class="selected-count">{{ selectedIds().size }} selected</span>
+            <button
+              class="btn-bulk"
+              [disabled]="!selectedIds().size"
+              (click)="bulkSet(RoomStatus.Cleaning)">
+              Mark cleaning
+            </button>
+            <button
+              class="btn-bulk"
+              [disabled]="!selectedIds().size"
+              (click)="bulkSet(RoomStatus.Available)">
+              Mark available
+            </button>
+            <button
+              class="btn-bulk btn-bulk--danger"
+              [disabled]="!selectedIds().size"
+              (click)="bulkSet(RoomStatus.Maintenance)">
+              Maintenance
+            </button>
+          </div>
+        </div>
+
+        <table class="room-table">
+          <thead>
+            <tr>
+              <th class="col-check">
+                <input
+                  type="checkbox"
+                  [checked]="allVisibleSelected()"
+                  (change)="toggleAllVisible($event)" />
+              </th>
+              <th>Room</th>
+              <th>Floor</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Housekeeping</th>
+              <th>Last cleaned</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of filteredRooms(); track r.id) {
+              <tr (click)="selectRoom(r)" class="row">
+                <td class="col-check" (click)="$event.stopPropagation()">
+                  <input
+                    type="checkbox"
+                    [checked]="selectedIds().has(r.id)"
+                    (change)="toggleSelect(r.id)" />
+                </td>
+                <td class="row-num">{{ r.number }}</td>
+                <td>{{ r.floor }}</td>
+                <td>{{ typeName(r.roomTypeId) }}</td>
+                <td>
+                  <span class="status-pill"
+                        [style.color]="meta(r.status).color"
+                        [style.background]="meta(r.status).bg">
+                    {{ meta(r.status).label }}
+                  </span>
+                </td>
+                <td class="hk-cell">{{ hkLabel(r.housekeepingStatus) }}</td>
+                <td class="cell-muted">
+                  {{ r.lastCleanedAt ? (r.lastCleanedAt | date:'MMM d, HH:mm') : '—' }}
+                </td>
+              </tr>
+            }
+            @if (!filteredRooms().length) {
+              <tr><td colspan="7" class="empty-row">No rooms match the filters.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+</div>
+
+<!-- Room drawer -->
+@if (selected(); as r) {
+  <div class="drawer-backdrop" (click)="closeDrawer()"></div>
+  <aside class="room-drawer" role="dialog" aria-label="Room details" [@slideIn]>
+    <header class="drawer-head">
+      <div>
+        <h2 class="drawer-title">Room {{ r.number }}</h2>
+        <p class="drawer-sub">Floor {{ r.floor }} · {{ typeName(r.roomTypeId) }}</p>
+      </div>
+      <button class="btn-close" (click)="closeDrawer()" aria-label="Close">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M3 3l8 8M11 3L3 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </header>
+
+    <div class="drawer-body">
+
+      <!-- Current status -->
+      <section class="d-section">
+        <h3 class="d-section__title">Current status</h3>
+        <div class="status-card"
+             [style.background]="meta(r.status).bg"
+             [style.border-color]="meta(r.status).color">
+          <span class="status-card__dot" [style.background]="meta(r.status).color"></span>
+          <span class="status-card__label" [style.color]="meta(r.status).color">
+            {{ meta(r.status).label }}
+          </span>
+        </div>
+      </section>
+
+      <!-- Change status -->
+      <section class="d-section">
+        <h3 class="d-section__title">Change status</h3>
+        <div class="status-options">
+          @for (s of statusList; track s) {
+            <button
+              class="status-opt"
+              [class.active]="r.status === s"
+              [class.pending]="pendingStatus() === s"
+              [disabled]="r.status === s || changing()"
+              (click)="stageStatus(s)">
+              <span class="status-opt__dot" [style.background]="meta(s).color"></span>
+              {{ meta(s).label }}
+            </button>
+          }
+        </div>
+
+        @if (pendingStatus(); as next) {
+          <div class="confirm-card" [style.border-color]="meta(next).color">
+            <div class="confirm-card__head">
+              <span class="confirm-pill" [style.color]="meta(r.status).color" [style.background]="meta(r.status).bg">
+                {{ meta(r.status).label }}
+              </span>
+              <span class="confirm-arrow">→</span>
+              <span class="confirm-pill" [style.color]="meta(next).color" [style.background]="meta(next).bg">
+                {{ meta(next).label }}
+              </span>
+            </div>
+            <textarea
+              class="status-note"
+              rows="2"
+              [placeholder]="notePlaceholder(next)"
+              [ngModel]="statusNote()"
+              (ngModelChange)="statusNote.set($event)"></textarea>
+            <div class="confirm-actions">
+              <button class="btn-cancel" (click)="cancelStaged()" [disabled]="changing()">
+                Cancel
+              </button>
+              <button class="btn-confirm"
+                      [style.background]="meta(next).color"
+                      [disabled]="changing()"
+                      (click)="confirmStaged()">
+                @if (changing()) {
+                  <span class="spinner"></span> Saving…
+                } @else {
+                  Confirm change
+                }
+              </button>
+            </div>
+          </div>
+        } @else {
+          <p class="status-hint">Tap a status above to stage a change.</p>
+        }
+      </section>
+
+      <!-- History -->
+      <section class="d-section">
+        <h3 class="d-section__title">History</h3>
+        @if (history().length === 0) {
+          <p class="d-empty">No status changes yet.</p>
+        } @else {
+          <ol class="history">
+            @for (h of history(); track h.id) {
+              <li class="history-item">
+                <span class="hist-dot" [style.background]="meta(h.to).color"></span>
+                <div class="hist-body">
+                  <div class="hist-line">
+                    <span class="hist-from">{{ meta(h.from).label }}</span>
+                    <span class="hist-arrow">→</span>
+                    <span class="hist-to" [style.color]="meta(h.to).color">{{ meta(h.to).label }}</span>
+                  </div>
+                  <div class="hist-meta">{{ h.at | date:'MMM d, y · HH:mm' }}</div>
+                  @if (h.note) {
+                    <div class="hist-note">{{ h.note }}</div>
+                  }
+                </div>
+              </li>
+            }
+          </ol>
+        }
+      </section>
+
+    </div>
+  </aside>
+}
+
+<!-- Bulk-action confirm modal -->
+@if (bulkPending(); as next) {
+  <div class="modal-backdrop" (click)="bulkRunning() || cancelBulk()"></div>
+  <div class="bulk-modal" role="dialog" aria-modal="true">
+    <div class="bulk-modal__icon" [style.background]="meta(next).bg" [style.color]="meta(next).color">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+        <circle cx="11" cy="11" r="9" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M11 7v5M11 14.5v.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <h3 class="bulk-modal__title">
+      Mark {{ selectedIds().size }} {{ selectedIds().size === 1 ? 'room' : 'rooms' }} as
+      <span [style.color]="meta(next).color">{{ meta(next).label }}</span>?
+    </h3>
+    <p class="bulk-modal__sub">
+      This will update the status of every selected room. You can change them back individually afterward.
+    </p>
+    <div class="bulk-modal__actions">
+      <button class="btn-cancel" (click)="cancelBulk()" [disabled]="bulkRunning()">
+        Cancel
+      </button>
+      <button class="btn-confirm"
+              [style.background]="meta(next).color"
+              [disabled]="bulkRunning()"
+              (click)="confirmBulk()">
+        @if (bulkRunning()) {
+          <span class="spinner"></span> Updating…
+        } @else {
+          Confirm
+        }
+      </button>
+    </div>
+  </div>
+}

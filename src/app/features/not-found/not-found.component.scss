@@ -1,0 +1,30 @@
+.not-found {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  padding: 40px;
+  background: var(--bg);
+}
+.code {
+  font-size: 96px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--border);
+  letter-spacing: -4px;
+}
+.title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+.body {
+  font-size: 14px;
+  color: var(--text-muted);
+  max-width: 340px;
+  margin: 0 0 8px;
+}

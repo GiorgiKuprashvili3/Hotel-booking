@@ -1,0 +1,358 @@
+<div class="con-page">
+
+  <!-- ── HEADER ─────────────────────────────────────────── -->
+  <header class="con-header">
+    <div class="con-title-block">
+      <div class="con-icon-wrap">🛎️</div>
+      <div>
+        <h1 class="con-title">Concierge</h1>
+        <p class="con-sub">{{ requests().length }} requests · {{ propertyCtx.active()?.name }}</p>
+      </div>
+    </div>
+
+    <div class="con-toolbar">
+      <div class="search-box">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+          <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M11 11l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <input type="text" placeholder="Search guest or request…"
+               [ngModel]="search()" (ngModelChange)="search.set($event)" class="search-input" />
+      </div>
+      <select class="filter-select" [ngModel]="filterType()" (ngModelChange)="filterType.set($event)">
+        <option value="">All Types</option>
+        @for (t of uniqueTypes(); track t.value) {
+          <option [value]="t.value">{{ t.icon }} {{ t.label }}</option>
+        }
+      </select>
+      <div class="view-toggle">
+        <button class="view-btn" [class.active]="view() === 'kanban'" (click)="view.set('kanban')" title="Kanban">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <rect x="1" y="2" width="4" height="12" rx="1" fill="currentColor"/>
+            <rect x="6" y="2" width="4" height="9"  rx="1" fill="currentColor"/>
+            <rect x="11" y="2" width="4" height="6" rx="1" fill="currentColor"/>
+          </svg>
+        </button>
+        <button class="view-btn" [class.active]="view() === 'list'" (click)="view.set('list')" title="List">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <button class="btn-new" (click)="openNewForm()">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        New Request
+      </button>
+    </div>
+  </header>
+
+  <!-- ── KPI STRIP ──────────────────────────────────────── -->
+  <div class="kpi-strip">
+    @for (col of columns; track col.status) {
+      <button class="kpi-tile"
+              [class.kpi-active]="statusFilter() === col.status"
+              (click)="toggleStatus(col.status)"
+              [style.--col]="col.color">
+        <span class="kpi-num">{{ countByStatus(col.status) }}</span>
+        <span class="kpi-lbl">{{ col.label }}</span>
+        <span class="kpi-bar" [style.background]="col.color"></span>
+      </button>
+    }
+    <div class="kpi-tile kpi-sla">
+      <span class="kpi-num overdue-num">{{ countOverdue() }}</span>
+      <span class="kpi-lbl">Overdue SLA</span>
+    </div>
+  </div>
+
+  <!-- ── LOADING ─────────────────────────────────────────── -->
+  @if (loading()) {
+    <div class="con-loading">
+      <div class="spinner"></div>
+      <span>Loading requests…</span>
+    </div>
+  } @else {
+
+    <!-- ── KANBAN VIEW ─────────────────────────────────────── -->
+    @if (view() === 'kanban') {
+      <div class="kanban-board">
+        @for (col of visibleColumns(); track col.status) {
+          <div class="kanban-col">
+            <div class="col-header" [style.--col-color]="col.color">
+              <div class="col-hl">
+                <span class="col-dot" [style.background]="col.color"></span>
+                <span class="col-label">{{ col.label }}</span>
+              </div>
+              <span class="col-count" [style.color]="col.color" [style.background]="col.bg">
+                {{ filteredByCol(col.status).length }}
+              </span>
+            </div>
+            <div class="col-body">
+              @if (filteredByCol(col.status).length === 0) {
+                <div class="col-empty">No requests</div>
+              }
+              @for (req of filteredByCol(col.status); track req.id) {
+                <button class="req-card" [class.selected]="selectedReq()?.id === req.id"
+                        (click)="selectReq(req)">
+                  <div class="req-card-top">
+                    <span class="type-chip">
+                      {{ typeIcon(req.type) }} {{ typeLabel(req.type) }}
+                    </span>
+                    @if (isOverdue(req)) {
+                      <span class="sla-chip overdue">⚡ Overdue</span>
+                    }
+                  </div>
+                  <p class="req-details">{{ req.details }}</p>
+                  <div class="req-card-meta">
+                    <span class="req-guest">
+                      <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5"/>
+                        <path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                      </svg>
+                      {{ guestName(req.guestId) }}
+                    </span>
+                    <span class="req-room">Rm {{ roomNumber(req.roomId) }}</span>
+                  </div>
+                  <div class="req-card-footer">
+                    <span class="req-time">{{ req.requestedAt | date:'HH:mm' }}</span>
+                    @if (req.assignedTo) {
+                      <span class="req-assignee">{{ staffInitials(req.assignedTo) }}</span>
+                    }
+                  </div>
+                </button>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- ── LIST VIEW ──────────────────────────────────────── -->
+    @if (view() === 'list') {
+      <div class="list-wrap">
+        <table class="req-table">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Guest</th>
+              <th>Room</th>
+              <th>Details</th>
+              <th>Assignee</th>
+              <th>Status</th>
+              <th>Requested</th>
+              <th>SLA</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (req of filteredList(); track req.id) {
+              <tr class="req-row" [class.selected]="selectedReq()?.id === req.id" (click)="selectReq(req)">
+                <td>
+                  <span class="type-chip sm">{{ typeIcon(req.type) }} {{ typeLabel(req.type) }}</span>
+                </td>
+                <td class="td-guest">{{ guestName(req.guestId) }}</td>
+                <td class="td-room">{{ roomNumber(req.roomId) }}</td>
+                <td class="td-details">{{ req.details }}</td>
+                <td class="td-assignee">
+                  @if (req.assignedTo) {
+                    <span class="assignee-badge">{{ staffInitials(req.assignedTo) }}</span>
+                    <span class="assignee-name">{{ staffName(req.assignedTo) }}</span>
+                  } @else {
+                    <span class="unassigned">—</span>
+                  }
+                </td>
+                <td>
+                  <span class="status-badge" [style.color]="statusColor(req.status)" [style.background]="statusBg(req.status)">
+                    {{ statusLabel(req.status) }}
+                  </span>
+                </td>
+                <td class="td-time">{{ req.requestedAt | date:'MMM d, HH:mm' }}</td>
+                <td>
+                  @if (isOverdue(req)) {
+                    <span class="sla-chip overdue">Overdue</span>
+                  } @else if (req.status === ConStatus.Completed || req.status === ConStatus.Cancelled) {
+                    <span class="sla-chip done">Done</span>
+                  } @else {
+                    <span class="sla-chip ok">{{ slaRemaining(req) }}</span>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        @if (filteredList().length === 0) {
+          <div class="empty-list">No requests match your filters.</div>
+        }
+      </div>
+    }
+
+  }
+
+  <!-- ── DETAIL DRAWER ──────────────────────────────────── -->
+  @if (selectedReq()) {
+    <div class="drawer-backdrop" (click)="closeDrawer()"></div>
+    <aside class="detail-drawer">
+      <div class="drawer-header">
+        <div class="drawer-title-row">
+          <span class="drawer-type">{{ typeIcon(selectedReq()!.type) }} {{ typeLabel(selectedReq()!.type) }}</span>
+          <button class="drawer-close" (click)="closeDrawer()">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <span class="status-badge lg"
+              [style.color]="statusColor(selectedReq()!.status)"
+              [style.background]="statusBg(selectedReq()!.status)">
+          {{ statusLabel(selectedReq()!.status) }}
+        </span>
+      </div>
+
+      <!-- Guest card -->
+      <div class="drawer-section">
+        <div class="guest-card">
+          <div class="guest-avatar">{{ guestInitials(selectedReq()!.guestId) }}</div>
+          <div class="guest-info">
+            <span class="guest-name-lg">{{ guestName(selectedReq()!.guestId) }}</span>
+            <span class="guest-room">Room {{ roomNumber(selectedReq()!.roomId) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Details -->
+      <div class="drawer-section">
+        <p class="section-label">Request Details</p>
+        <p class="details-text">{{ selectedReq()!.details }}</p>
+      </div>
+
+      @if (selectedReq()!.scheduledFor) {
+        <div class="drawer-section">
+          <p class="section-label">Scheduled For</p>
+          <p class="details-text">{{ selectedReq()!.scheduledFor | date:'EEE, MMM d · HH:mm' }}</p>
+        </div>
+      }
+
+      <!-- SLA indicator -->
+      <div class="drawer-section">
+        <p class="section-label">Timeline</p>
+        <div class="timeline-row">
+          <div class="timeline-item">
+            <span class="tl-label">Requested</span>
+            <span class="tl-value">{{ selectedReq()!.requestedAt | date:'HH:mm' }}</span>
+          </div>
+          <div class="timeline-item">
+            <span class="tl-label">SLA</span>
+            <span class="tl-value">{{ getSla(selectedReq()!.type) }} min</span>
+          </div>
+          @if (selectedReq()!.completedAt) {
+            <div class="timeline-item">
+              <span class="tl-label">Completed</span>
+              <span class="tl-value">{{ selectedReq()!.completedAt | date:'HH:mm' }}</span>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Assign staff -->
+      <div class="drawer-section">
+        <p class="section-label">Assigned To</p>
+        <select class="form-select" [ngModel]="selectedReq()!.assignedTo ?? ''"
+                (ngModelChange)="assignStaff($event)"
+                [disabled]="actionBusy()">
+          <option value="">— Unassigned —</option>
+          @for (s of staffList(); track s.id) {
+            <option [value]="s.id">{{ s.firstName }} {{ s.lastName }}</option>
+          }
+        </select>
+      </div>
+
+      <!-- Status actions -->
+      <div class="drawer-section">
+        <p class="section-label">Update Status</p>
+        <div class="status-actions">
+          @for (col of columns; track col.status) {
+            <button class="status-action-btn"
+                    [class.current]="selectedReq()!.status === col.status"
+                    [style.--col]="col.color"
+                    [disabled]="selectedReq()!.status === col.status || actionBusy()"
+                    (click)="changeStatus(col.status)">
+              {{ col.label }}
+            </button>
+          }
+        </div>
+      </div>
+
+      @if (actionBusy()) {
+        <div class="drawer-busy">
+          <div class="spinner sm"></div> Saving…
+        </div>
+      }
+    </aside>
+  }
+
+  <!-- ── NEW REQUEST FORM ───────────────────────────────── -->
+  @if (showNewForm()) {
+    <div class="drawer-backdrop" (click)="closeNewForm()"></div>
+    <aside class="detail-drawer new-form-drawer">
+      <div class="drawer-header">
+        <div class="drawer-title-row">
+          <span class="drawer-type">🛎️ New Concierge Request</span>
+          <button class="drawer-close" (click)="closeNewForm()">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="drawer-section">
+        <label class="form-label">Request Type *</label>
+        <select class="form-select" [(ngModel)]="newType">
+          @for (t of REQUEST_TYPES; track t.value) {
+            <option [value]="t.value">{{ t.icon }} {{ t.label }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="drawer-section">
+        <label class="form-label">Guest / Reservation *</label>
+        <select class="form-select" [(ngModel)]="newReservationId" (ngModelChange)="onReservationChange($event)">
+          <option value="">— Select guest —</option>
+          @for (r of activeReservations(); track r.id) {
+            <option [value]="r.id">{{ guestName(r.guestId) }} · Rm {{ roomNumber(r.roomId) }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="drawer-section">
+        <label class="form-label">Details *</label>
+        <textarea class="form-textarea" [(ngModel)]="newDetails"
+                  placeholder="Describe the request…" rows="3"></textarea>
+      </div>
+
+      <div class="drawer-section">
+        <label class="form-label">Scheduled For (optional)</label>
+        <input class="form-input" type="datetime-local" [(ngModel)]="newScheduledFor" />
+      </div>
+
+      <div class="drawer-section">
+        <label class="form-label">Assign To</label>
+        <select class="form-select" [(ngModel)]="newAssignedTo">
+          <option value="">— Unassigned —</option>
+          @for (s of staffList(); track s.id) {
+            <option [value]="s.id">{{ s.firstName }} {{ s.lastName }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn-cancel" (click)="closeNewForm()">Cancel</button>
+        <button class="btn-submit" (click)="submitNew()"
+                [disabled]="!newType || !newReservationId || !newDetails.trim() || actionBusy()">
+          @if (actionBusy()) { Saving… } @else { Create Request }
+        </button>
+      </div>
+    </aside>
+  }
+
+</div>
