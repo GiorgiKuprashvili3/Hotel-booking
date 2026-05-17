@@ -2,17 +2,38 @@ import { Routes } from '@angular/router';
 
 export const APP_ROUTES: Routes = [
 
-  // ── Public ──────────────────────────────────────────────────────────────
+  // ── Root redirect ────────────────────────────────────────────────────────
   {
     path: '',
+    redirectTo: 'book',
+    pathMatch: 'full',
+  },
+
+  // ── Public booking shell ─────────────────────────────────────────────────
+  {
+    path: 'book',
     loadComponent: () =>
-      import('./features/public-booking/landing-page.component')
-        .then(m => m.LandingPageComponent),
+      import('./features/public-booking/public-shell.component')
+        .then(m => m.PublicShellComponent),
+    children: [
+      {
+        path: '',
+        loadComponent: () =>
+          import('./features/public-booking/landing-page.component')
+            .then(m => m.LandingPageComponent),
+      },
+      {
+        path: 'reserve',
+        loadComponent: () =>
+          import('./features/public-booking/booking-flow.component')
+            .then(m => m.BookingFlowComponent),
+      },
+    ],
   },
 
   // ── Auth shell (lazy) ────────────────────────────────────────────────────
   {
-    path: '',
+    path: 'app',
     loadComponent: () =>
       import('./layout/shell/shell.component')
         .then(m => m.ShellComponent),
@@ -112,10 +133,18 @@ export const APP_ROUTES: Routes = [
     ],
   },
 
+  // ── Auth ─────────────────────────────────────────────────────────────────
+  {
+    path: 'auth/login',
+    loadComponent: () =>
+      import('./features/auth/login/login.component')
+        .then(m => m.LoginComponent),
+  },
+
   // ── Fallback ─────────────────────────────────────────────────────────────
   {
     path: '**',
-    redirectTo: '',
+    redirectTo: 'book',
   },
 
 ];
