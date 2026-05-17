@@ -1,168 +1,121 @@
 import { Routes } from '@angular/router';
-import { authGuard } from './core/auth/auth.guard';
-import { roleGuard } from './core/auth/role.guard';
-import { Role } from './domain/enums';
 
-export const APP_ROUTES: Routes = [
-  /* ---------- Auth ---------- */
-  {
-    path: 'auth',
-    children: [
-      {
-        path: 'login',
-        loadComponent: () => import('./features/auth/login/login.component').then(m => m.LoginComponent),
-        title: 'Sign in · LuxStay',
-      },
-      { path: '', pathMatch: 'full', redirectTo: 'login' },
-    ],
-  },
+export const routes: Routes = [
 
-  /* ---------- Public booking surface (no auth) ---------- */
+  // ── Public ──────────────────────────────────────────────────────────────
   {
-    path: 'book',
+    path: '',
     loadComponent: () =>
-      import('./features/public-booking/public-shell.component').then(m => m.PublicShellComponent),
-    children: [
-      {
-        path: '',
-        pathMatch: 'full',
-        loadComponent: () =>
-          import('./features/public-booking/landing-page.component').then(m => m.LandingPageComponent),
-        title: 'The Aurora Tbilisi — A LuxStay Hotel',
-      },
-      {
-        path: 'reserve',
-        loadComponent: () =>
-          import('./features/public-booking/booking-flow.component').then(m => m.BookingFlowComponent),
-        title: 'Book your stay · The Aurora',
-      },
-    ],
+      import('./features/public-booking/landing-page.component')
+        .then(m => m.LandingPageComponent),
   },
 
-  /* ---------- Authenticated app shell ---------- */
+  // ── Auth shell (lazy) ────────────────────────────────────────────────────
   {
-    path: 'app',
-    canActivate: [authGuard],
-    loadComponent: () => import('./layout/shell/shell.component').then(m => m.ShellComponent),
+    path: '',
+    loadComponent: () =>
+      import('./layout/shell/shell.component')
+        .then(m => m.ShellComponent),
     children: [
-      { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
 
       {
         path: 'dashboard',
-        loadComponent: () => import('./features/dashboard/dashboard.component').then(m => m.DashboardComponent),
-        title: 'Dashboard · LuxStay',
+        loadComponent: () =>
+          import('./features/dashboard/dashboard.component')
+            .then(m => m.DashboardComponent),
+      },
+
+      {
+        path: 'reservations',
+        loadComponent: () =>
+          import('./features/reservations/reservations.component')
+            .then(m => m.ReservationsComponent),
+      },
+
+      {
+        path: 'reservations/check-in',
+        loadComponent: () =>
+          import('./features/reservations/check-in-wizard.component')
+            .then(m => m.CheckInWizardComponent),
+      },
+
+      {
+        path: 'reservations/check-out',
+        loadComponent: () =>
+          import('./features/reservations/check-out-wizard.component')
+            .then(m => m.CheckOutWizardComponent),
+      },
+
+      {
+        path: 'rooms',
+        loadComponent: () =>
+          import('./features/rooms/rooms.component')
+            .then(m => m.RoomsComponent),
+      },
+
+      {
+        path: 'guests',
+        loadComponent: () =>
+          import('./features/guests/guests.component')
+            .then(m => m.GuestsComponent),
+      },
+
+      {
+        path: 'housekeeping',
+        loadComponent: () =>
+          import('./features/housekeeping/housekeeping.component')
+            .then(m => m.HousekeepingComponent),
+      },
+
+      {
+        path: 'maintenance',
+        loadComponent: () =>
+          import('./features/maintenance/maintenance.component')
+            .then(m => m.MaintenanceComponent),
+      },
+
+      {
+        path: 'concierge',
+        loadComponent: () =>
+          import('./features/concierge/concierge.component')
+            .then(m => m.ConciergeComponent),
+      },
+
+      {
+        path: 'analytics',
+        loadComponent: () =>
+          import('./features/analytics/analytics.component')
+            .then(m => m.AnalyticsComponent),
+      },
+
+      {
+        path: 'loyalty',
+        loadComponent: () =>
+          import('./features/loyalty/loyalty.component')
+            .then(m => m.LoyaltyComponent),
+      },
+
+      {
+        path: 'audit',
+        loadComponent: () =>
+          import('./features/audit/audit.component')
+            .then(m => m.AuditComponent),
       },
 
       {
         path: 'calendar',
-        canActivate: [roleGuard],
-        data: { roles: [Role.Admin, Role.Manager, Role.Receptionist] },
-        loadComponent: () => import('./features/calendar.page').then(m => m.CalendarPageComponent),
-        title: 'Calendar · LuxStay',
+        loadComponent: () =>
+          import('./features/calendar/calendar.component')
+            .then(m => m.CalendarComponent),
       },
-      {
-        path: 'reservations',
-        canActivate: [roleGuard],
-        data: { roles: [Role.Admin, Role.Manager, Role.Receptionist] },
-        loadComponent: () => import('./features/reservations.page').then(m => m.ReservationsPageComponent),
-        title: 'Reservations · LuxStay',
-      },
-      {
-        path: 'reservations/:id',
-        canActivate: [roleGuard],
-        data: { roles: [Role.Admin, Role.Manager, Role.Receptionist] },
-        loadComponent: () => import('./features/reservations/reservation-detail.page').then(m => m.ReservationDetailPageComponent),
-        title: 'Reservation · LuxStay',
-      },
-      {
-        path: 'rooms',
-        canActivate: [roleGuard],
-        data: { roles: [Role.Admin, Role.Manager, Role.Receptionist, Role.Housekeeper] },
-        loadComponent: () => import('./features/rooms.page').then(m => m.RoomsPageComponent),
-        title: 'Rooms · LuxStay',
-      },
-      {
-        path: 'guests',
-        canActivate: [roleGuard],
-        data: { roles: [Role.Admin, Role.Manager, Role.Receptionist] },
-        loadComponent: () => import('./features/guests.page').then(m => m.GuestsPageComponent),
-        title: 'Guests · LuxStay',
-      },
-      {
-        path: 'guests/:id',
-        canActivate: [roleGuard],
-        data: { roles: [Role.Admin, Role.Manager, Role.Receptionist] },
-        loadComponent: () => import('./features/guests/guest-detail.page').then(m => m.GuestDetailPageComponent),
-        title: 'Guest · LuxStay',
-      },
-      {
-        path: 'housekeeping',
-        canActivate: [roleGuard],
-        data: { roles: [Role.Admin, Role.Manager, Role.Housekeeper] },
-        loadComponent: () => import('./features/housekeeping.page').then(m => m.HousekeepingPageComponent),
-        title: 'Housekeeping · LuxStay',
-      },
-      {
-        path: 'maintenance',
-        canActivate: [roleGuard],
-        data: { roles: [Role.Admin, Role.Manager, Role.Housekeeper] },
-        loadComponent: () => import('./features/maintenance.page').then(m => m.MaintenancePageComponent),
-        title: 'Maintenance · LuxStay',
-      },
-      {
-        path: 'concierge',
-        canActivate: [roleGuard],
-        data: { roles: [Role.Admin, Role.Manager, Role.Receptionist] },
-        loadComponent: () => import('./features/concierge.page').then(m => m.ConciergePageComponent),
-        title: 'Concierge · LuxStay',
-      },
-      {
-        path: 'analytics',
-        canActivate: [roleGuard],
-        data: { roles: [Role.Admin, Role.Manager, Role.Accountant] },
-        loadComponent: () => import('./features/analytics.page').then(m => m.AnalyticsPageComponent),
-        title: 'Analytics · LuxStay',
-      },
-      {
-        path: 'loyalty',
-        canActivate: [roleGuard],
-        data: { roles: [Role.Admin, Role.Manager] },
-        loadComponent: () => import('./features/loyalty.page').then(m => m.LoyaltyPageComponent),
-        title: 'Loyalty · LuxStay',
-      },
-      {
-        path: 'staff',
-        canActivate: [roleGuard],
-        data: { roles: [Role.Admin, Role.Manager] },
-        loadComponent: () => import('./features/staff.page').then(m => m.StaffPageComponent),
-        title: 'Staff · LuxStay',
-      },
-      {
-        path: 'audit',
-        canActivate: [roleGuard],
-        data: { roles: [Role.Admin, Role.Manager] },
-        loadComponent: () => import('./features/audit.page').then(m => m.AuditPageComponent),
-        title: 'Audit Log · LuxStay',
-      },
-      {
-        path: 'settings',
-        canActivate: [roleGuard],
-        data: { roles: [Role.Admin] },
-        loadComponent: () => import('./features/settings.page').then(m => m.SettingsPageComponent),
-        title: 'Settings · LuxStay',
-      },
+
     ],
   },
 
-  /* ---------- 404 ---------- */
+  // ── Fallback ─────────────────────────────────────────────────────────────
   {
-    path: 'not-found',
-    loadComponent: () => import('./features/not-found/not-found.component').then(m => m.NotFoundComponent),
-    title: 'Not found · LuxStay',
+    path: '**',
+    redirectTo: '',
   },
 
-  /* ---------- Defaults ---------- */
-  /* Public landing is the front door — recruiters land here first. */
-  { path: '',  pathMatch: 'full', redirectTo: '/book' },
-  { path: '**', redirectTo: '/not-found' },
 ];
