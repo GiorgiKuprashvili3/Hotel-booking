@@ -137,6 +137,21 @@ export enum LoyaltyTier {
   Diamond  = 'diamond',
 }
 
+export enum MealPlan {
+  RoomOnly     = 'room_only',
+  BedBreakfast = 'bed_breakfast',
+  HalfBoard    = 'half_board',
+  FullBoard    = 'full_board',
+  AllInclusive = 'all_inclusive',
+}
+
+export enum GuestIdType {
+  Passport       = 'passport',
+  NationalId     = 'national_id',
+  DrivingLicense = 'driving_license',
+  Other          = 'other',
+}
+
 export enum AuditAction {
   Created        = 'created',
   Updated        = 'updated',
