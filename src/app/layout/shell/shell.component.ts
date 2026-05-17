@@ -2,7 +2,7 @@ import {
   Component, computed, HostListener, inject, signal,
 } from '@angular/core';
 import { CommonModule }           from '@angular/common';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { RouterLink, RouterLinkActive, RouterOutlet, Router } from '@angular/router';
 import { MatIconModule }          from '@angular/material/icon';
 import { MatButtonModule }        from '@angular/material/button';
 import { MatMenuModule }          from '@angular/material/menu';
@@ -12,6 +12,7 @@ import { FormsModule }            from '@angular/forms';
 import { AuthService }            from '../../core/auth/auth.service';
 import { PropertyContextService } from '../../core/config/property-context.service';
 import { LayoutService }          from '../../core/config/layout.service';
+import { BookingBroadcastService } from '../../core/realtime/booking-broadcast.service';
 import { Role }                   from '../../domain/enums';
 
 interface NavItem {
@@ -148,43 +149,39 @@ const NAV: NavItem[] = [
                     class="notif-btn"
                     matTooltip="Notifications"
                     [matMenuTriggerFor]="notifMenu"
-                    aria-label="Notifications">
+                    [attr.aria-label]="notifAriaLabel()">
               <mat-icon>notifications</mat-icon>
-              <span class="notif-badge">3</span>
+              @if (notifCount() > 0) {
+                <span class="notif-badge" aria-hidden="true">{{ notifCount() }}</span>
+              }
             </button>
 
             <mat-menu #notifMenu="matMenu" xPosition="before" class="notif-menu">
               <div class="notif-panel-header" (click)="$event.stopPropagation()">
                 <span class="notif-panel-title">Notifications</span>
-                <span class="notif-panel-badge">3</span>
+                @if (notifCount() > 0) {
+                  <span class="notif-panel-badge">{{ notifCount() }}</span>
+                }
               </div>
-              <button mat-menu-item class="notif-item-btn">
-                <div class="notif-item">
-                  <span class="notif-dot info"></span>
-                  <div class="notif-content">
-                    <div class="notif-title">New reservation</div>
-                    <div class="notif-meta">Sofia booked Suite 502 · 2m ago</div>
-                  </div>
+              @if (notifCount() === 0) {
+                <div class="notif-empty" (click)="$event.stopPropagation()">
+                  <mat-icon>notifications_none</mat-icon>
+                  <span>You're all caught up.</span>
                 </div>
-              </button>
-              <button mat-menu-item class="notif-item-btn">
-                <div class="notif-item">
-                  <span class="notif-dot warning"></span>
-                  <div class="notif-content">
-                    <div class="notif-title">Late checkout request</div>
-                    <div class="notif-meta">Room 304 · 12m ago</div>
-                  </div>
-                </div>
-              </button>
-              <button mat-menu-item class="notif-item-btn">
-                <div class="notif-item">
-                  <span class="notif-dot danger"></span>
-                  <div class="notif-content">
-                    <div class="notif-title">Maintenance flagged</div>
-                    <div class="notif-meta">AC unit, Room 401 · 1h ago</div>
-                  </div>
-                </div>
-              </button>
+              } @else {
+                @for (n of recentBookings(); track n.reservationId) {
+                  <button mat-menu-item class="notif-item-btn"
+                          (click)="goToReservation(n.reservationId)">
+                    <div class="notif-item">
+                      <span class="notif-dot success"></span>
+                      <div class="notif-content">
+                        <div class="notif-title">New booking · {{ n.confirmationNumber }}</div>
+                        <div class="notif-meta">{{ n.guestName }} · {{ n.roomTypeName }}</div>
+                      </div>
+                    </div>
+                  </button>
+                }
+              }
             </mat-menu>
 
             <div class="topbar-sep"></div>
@@ -547,6 +544,17 @@ const NAV: NavItem[] = [
     .notif-dot.info    { background: var(--info, #2563EB); }
     .notif-dot.warning { background: var(--warning, #D97706); }
     .notif-dot.danger  { background: var(--danger, #DC2626); }
+    .notif-dot.success { background: var(--success, #4A7C59); }
+    .notif-empty {
+      display: flex; align-items: center; gap: 10px;
+      padding: 20px 16px;
+      font-size: 13px; color: var(--text-muted, #6B7280);
+      justify-content: center;
+    }
+    .notif-empty mat-icon {
+      font-size: 18px !important; width: 18px !important; height: 18px !important;
+      color: var(--text-subtle, #B8B8B8);
+    }
     .notif-content { display: flex; flex-direction: column; }
     .notif-title { font-size: 13px; font-weight: 500; color: var(--text, #111827); }
     .notif-meta  { font-size: 11px; color: var(--text-muted, #6B7280); margin-top: 2px; }
@@ -608,15 +616,34 @@ const NAV: NavItem[] = [
   `],
 })
 export class ShellComponent {
-  auth   = inject(AuthService);
-  ctx    = inject(PropertyContextService);
-  layout = inject(LayoutService);
+  auth      = inject(AuthService);
+  ctx       = inject(PropertyContextService);
+  layout    = inject(LayoutService);
+  broadcast = inject(BookingBroadcastService);
+  private router = inject(Router);
 
   searchQuery = '';
   collapsed   = signal(false);
 
+  /** Most recent booking events received via the realtime channel. */
+  recentBookings = computed(() =>
+    this.broadcast.recent()
+      .filter(e => e.type === 'booking.created')
+      .slice(0, 5));
+
+  notifCount = computed(() => this.recentBookings().length);
+
+  notifAriaLabel = computed(() =>
+    this.notifCount() > 0
+      ? `Notifications, ${this.notifCount()} unread`
+      : 'Notifications, no unread');
+
   constructor() {
     this.ctx.load();
+  }
+
+  goToReservation(id: string): void {
+    this.router.navigate(['/app/reservations', id]);
   }
 
   visibleNav = computed(() => {

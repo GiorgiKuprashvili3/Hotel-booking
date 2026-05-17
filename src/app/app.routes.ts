@@ -17,6 +17,28 @@ export const APP_ROUTES: Routes = [
     ],
   },
 
+  /* ---------- Public booking surface (no auth) ---------- */
+  {
+    path: 'book',
+    loadComponent: () =>
+      import('./features/public-booking/public-shell.component').then(m => m.PublicShellComponent),
+    children: [
+      {
+        path: '',
+        pathMatch: 'full',
+        loadComponent: () =>
+          import('./features/public-booking/landing-page.component').then(m => m.LandingPageComponent),
+        title: 'The Aurora Tbilisi — A LuxStay Hotel',
+      },
+      {
+        path: 'reserve',
+        loadComponent: () =>
+          import('./features/public-booking/booking-flow.component').then(m => m.BookingFlowComponent),
+        title: 'Book your stay · The Aurora',
+      },
+    ],
+  },
+
   /* ---------- Authenticated app shell ---------- */
   {
     path: 'app',
@@ -140,6 +162,7 @@ export const APP_ROUTES: Routes = [
   },
 
   /* ---------- Defaults ---------- */
-  { path: '',  pathMatch: 'full', redirectTo: '/app/dashboard' },
+  /* Public landing is the front door — recruiters land here first. */
+  { path: '',  pathMatch: 'full', redirectTo: '/book' },
   { path: '**', redirectTo: '/not-found' },
 ];
