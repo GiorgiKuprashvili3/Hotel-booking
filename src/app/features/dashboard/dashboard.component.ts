@@ -1,11 +1,14 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
+import { Subscription } from 'rxjs';
 import { KpiTileComponent } from '../../shared/components/kpi-tile.component';
 import { PageHeaderComponent } from '../../shared/components/page-header.component';
 import { StatusChipComponent } from '../../shared/components/status-chip.component';
 import { PropertyContextService } from '../../core/config/property-context.service';
+import { BookingBroadcastService, BookingCreatedEvent } from '../../core/realtime/booking-broadcast.service';
+import { ToastService } from '../../core/ui/toast.service';
 import {
   ANALYTICS_SERVICE, AnalyticsSnapshot,
   GUEST_SERVICE, HOUSEKEEPING_SERVICE, MAINTENANCE_SERVICE,
@@ -37,6 +40,26 @@ import {
         New reservation
       </button>
     </lux-page-header>
+
+    @if (liveBookings().length > 0) {
+      <div class="live-strip" role="status" aria-live="polite">
+        <div class="live-strip-pulse" aria-hidden="true">
+          <span class="dot"></span>
+          <span>LIVE</span>
+        </div>
+        <span class="live-strip-text">
+          {{ liveBookings().length }} new
+          {{ liveBookings().length === 1 ? 'booking' : 'bookings' }}
+          since you opened the dashboard
+        </span>
+        <div class="live-strip-spacer"></div>
+        <button class="live-strip-dismiss" type="button"
+                (click)="dismissLive()"
+                aria-label="Dismiss live booking notifications">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+    }
 
     <div class="kpi-grid">
       <lux-kpi-tile
@@ -335,9 +358,61 @@ import {
       font-size: var(--text-xs);
       color: var(--text-subtle);
     }
+
+    /* ── Live bookings strip ─────────────────────────────────── */
+    .live-strip {
+      display: flex; align-items: center; gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      margin-bottom: var(--space-4);
+      background: linear-gradient(90deg,
+        rgba(74, 124, 89, 0.10),
+        rgba(74, 124, 89, 0.04));
+      border: 1px solid rgba(74, 124, 89, 0.25);
+      border-radius: var(--radius-md);
+      font-size: var(--text-sm);
+      animation: live-strip-in 320ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .live-strip-pulse {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.14em;
+      color: var(--success);
+    }
+    .live-strip-pulse .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 0 0 rgba(74, 124, 89, 0.5);
+      animation: live-pulse 1.8s ease-out infinite;
+    }
+    .live-strip-text { color: var(--text); font-weight: 500; }
+    .live-strip-spacer { flex: 1; }
+    .live-strip-dismiss {
+      background: transparent; border: none;
+      width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .live-strip-dismiss:hover { background: rgba(0,0,0,0.05); color: var(--text); }
+    .live-strip-dismiss mat-icon {
+      font-size: 16px !important; width: 16px !important; height: 16px !important;
+    }
+    @keyframes live-pulse {
+      0%   { box-shadow: 0 0 0 0   rgba(74, 124, 89, 0.55); }
+      70%  { box-shadow: 0 0 0 8px rgba(74, 124, 89, 0);    }
+      100% { box-shadow: 0 0 0 0   rgba(74, 124, 89, 0);    }
+    }
+    @keyframes live-strip-in {
+      from { opacity: 0; transform: translateY(-4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .live-strip { animation: none; }
+      .live-strip-pulse .dot { animation: none; }
+    }
   `],
 })
-export class DashboardComponent {
+export class DashboardComponent implements OnDestroy {
   private ctx          = inject(PropertyContextService);
   private roomSvc      = inject(ROOM_SERVICE);
   private resSvc       = inject(RESERVATION_SERVICE);
@@ -345,6 +420,8 @@ export class DashboardComponent {
   private housekeepingSvc = inject(HOUSEKEEPING_SERVICE);
   private maintenanceSvc  = inject(MAINTENANCE_SERVICE);
   private analyticsSvc    = inject(ANALYTICS_SERVICE);
+  private broadcast       = inject(BookingBroadcastService);
+  private toast           = inject(ToastService);
 
   loading      = signal(true);
   rooms        = signal<Room[]>([]);
@@ -353,6 +430,12 @@ export class DashboardComponent {
   hskTasks     = signal<HousekeepingTask[]>([]);
   maintenance  = signal<MaintenanceRequest[]>([]);
   snapshots    = signal<AnalyticsSnapshot[]>([]);
+
+  /** Bookings received via the realtime channel since this session began. */
+  liveBookings = signal<BookingCreatedEvent[]>([]);
+
+  /** Held subscription so we can tear down cleanly on destroy. */
+  private broadcastSub?: Subscription;
 
   /* ── Greeting ─────────────────────────────────────────────── */
 
@@ -378,10 +461,8 @@ export class DashboardComponent {
   /* ── Data loading ─────────────────────────────────────────── */
 
   constructor() {
-    console.log('analyticsSvc injected:', this.analyticsSvc);
     effect(() => {
       const propId = this.ctx.activeId();
-      console.log('propId:', propId);
       if (!propId) return;
 
       this.loading.set(true);
@@ -400,13 +481,40 @@ export class DashboardComponent {
       this.maintenanceSvc.list(propId).subscribe(items => this.maintenance.set(items));
 
       this.analyticsSvc.listSnapshots(propId).subscribe({
-        next: snaps => {
-          console.log('analytics snaps received:', snaps.length, snaps.at(-1));
-          this.snapshots.set(snaps);
-        },
-        error: err => console.error('analytics error:', err),
+        next: snaps => this.snapshots.set(snaps),
+        error: err   => console.error('analytics error:', err),
       });
     });
+
+    /* Realtime: surface bookings made from the public site. Works
+       same-tab (via the local subject) and across tabs (via BroadcastChannel). */
+    this.broadcastSub = this.broadcast.events$().subscribe(evt => {
+      if (evt.type !== 'booking.created') return;
+
+      const propId = this.ctx.activeId();
+      // Only react when the event is for the property currently being viewed.
+      if (propId && evt.propertyId !== propId) return;
+
+      this.liveBookings.update(list => [evt, ...list].slice(0, 50));
+
+      // Pull the fresh reservation list so the new row shows in the table.
+      if (propId) {
+        this.resSvc.list(propId).subscribe(res => this.reservations.set(res));
+      }
+
+      this.toast.success(
+        'New booking received',
+        `${evt.confirmationNumber} · ${evt.guestName} · ${evt.roomTypeName}`,
+      );
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.broadcastSub?.unsubscribe();
+  }
+
+  dismissLive(): void {
+    this.liveBookings.set([]);
   }
 
   /* ── KPI signals ──────────────────────────────────────────── */
