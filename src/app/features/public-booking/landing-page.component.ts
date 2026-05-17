@@ -179,9 +179,9 @@ const ROOM_FALLBACK = 'https://images.unsplash.com/photo-1590490359683-658d3d23f
                   <span><mat-icon aria-hidden="true">people</mat-icon> {{ rt.maxOccupancy }} guests</span>
                 </div>
                 <p class="room-desc">{{ rt.description }}</p>
-                @if (rt.amenities?.length) {
+                @if (rt.amenities.length) {
                   <ul class="room-amenities">
-                    @for (a of rt.amenities!.slice(0, 4); track a) {
+                    @for (a of rt.amenities.slice(0, 4); track a) {
                       <li>{{ a }}</li>
                     }
                   </ul>
