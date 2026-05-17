@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
 
-export const routes: Routes = [
+export const APP_ROUTES: Routes = [
 
   // ── Public ──────────────────────────────────────────────────────────────
   {
@@ -28,8 +28,8 @@ export const routes: Routes = [
       {
         path: 'reservations',
         loadComponent: () =>
-          import('./features/reservations/reservations.component')
-            .then(m => m.ReservationsComponent),
+          import('./features/reservations.page')
+            .then(m => m.ReservationsPageComponent),
       },
 
       {
@@ -49,64 +49,64 @@ export const routes: Routes = [
       {
         path: 'rooms',
         loadComponent: () =>
-          import('./features/rooms/rooms.component')
-            .then(m => m.RoomsComponent),
+          import('./features/rooms.page')
+            .then(m => m.RoomsPageComponent),
       },
 
       {
         path: 'guests',
         loadComponent: () =>
-          import('./features/guests/guests.component')
-            .then(m => m.GuestsComponent),
+          import('./features/guests.page')
+            .then(m => m.GuestsPageComponent),
       },
 
       {
         path: 'housekeeping',
         loadComponent: () =>
-          import('./features/housekeeping/housekeeping.component')
-            .then(m => m.HousekeepingComponent),
+          import('./features/housekeeping.page')
+            .then(m => m.HousekeepingPageComponent),
       },
 
       {
         path: 'maintenance',
         loadComponent: () =>
-          import('./features/maintenance/maintenance.component')
-            .then(m => m.MaintenanceComponent),
+          import('./features/maintenance.page')
+            .then(m => m.MaintenancePageComponent),
       },
 
       {
         path: 'concierge',
         loadComponent: () =>
-          import('./features/concierge/concierge.component')
-            .then(m => m.ConciergeComponent),
+          import('./features/concierge.page')
+            .then(m => m.ConciergePageComponent),
       },
 
       {
         path: 'analytics',
         loadComponent: () =>
-          import('./features/analytics/analytics.component')
-            .then(m => m.AnalyticsComponent),
+          import('./features/analytics.page')
+            .then(m => m.AnalyticsPageComponent),
       },
 
       {
         path: 'loyalty',
         loadComponent: () =>
-          import('./features/loyalty/loyalty.component')
-            .then(m => m.LoyaltyComponent),
+          import('./features/loyalty.page')
+            .then(m => m.LoyaltyPageComponent),
       },
 
       {
         path: 'audit',
         loadComponent: () =>
-          import('./features/audit/audit.component')
-            .then(m => m.AuditComponent),
+          import('./features/audit.page')
+            .then(m => m.AuditPageComponent),
       },
 
       {
         path: 'calendar',
         loadComponent: () =>
-          import('./features/calendar/calendar.component')
-            .then(m => m.CalendarComponent),
+          import('./features/calendar.page')
+            .then(m => m.CalendarPageComponent),
       },
 
     ],
