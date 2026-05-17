@@ -28,8 +28,9 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // generateTokens() hashes and persists the refresh token internally —
+    // do NOT call saveRefreshToken here again or it overwrites the hash with plaintext.
     const tokens = await this.generateTokens(staff.id, staff.email, staff.role);
-    await this.staffService.saveRefreshToken(staff.id, tokens.refreshToken);
 
     return {
       accessToken: tokens.accessToken,
@@ -63,8 +64,8 @@ export class AuthService {
       );
       if (!tokenMatch) throw new UnauthorizedException('Refresh token invalid');
 
+      // generateTokens() hashes and persists the new refresh token internally.
       const tokens = await this.generateTokens(staff.id, staff.email, staff.role);
-      await this.staffService.saveRefreshToken(staff.id, tokens.refreshToken);
 
       return tokens;
     } catch {
