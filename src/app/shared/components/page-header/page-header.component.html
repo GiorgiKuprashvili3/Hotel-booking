@@ -1,0 +1,13 @@
+<div class="page-header">
+  <div class="page-header-text">
+    <h1 class="page-title">{{ title }}</h1>
+    @if (subtitle !== undefined && subtitle !== '') {
+      <p class="page-subtitle">{{ subtitle }}</p>
+    }
+  </div>
+  @if (hasActions) {
+    <div class="page-actions">
+      <ng-content />
+    </div>
+  }
+</div>

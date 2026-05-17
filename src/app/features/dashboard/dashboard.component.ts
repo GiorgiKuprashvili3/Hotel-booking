@@ -2,10 +2,11 @@ import { Component, computed, effect, inject, signal, OnDestroy } from '@angular
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
+import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
-import { KpiTileComponent } from '../../shared/components/kpi-tile.component';
-import { PageHeaderComponent } from '../../shared/components/page-header.component';
-import { StatusChipComponent } from '../../shared/components/status-chip.component';
+import { KpiTileComponent } from '../../shared/components/kpi-tile/kpi-tile.component';
+import { PageHeaderComponent } from '../../shared/components/page-header/page-header.component';
+import { StatusChipComponent } from '../../shared/components/status-chip/status-chip.component';
 import { PropertyContextService } from '../../core/config/property-context.service';
 import { BookingBroadcastService, BookingCreatedEvent } from '../../core/realtime/booking-broadcast.service';
 import { ToastService } from '../../core/ui/toast.service';
@@ -27,393 +28,12 @@ import {
     CommonModule, MatIconModule, MatButtonModule,
     KpiTileComponent, PageHeaderComponent, StatusChipComponent,
   ],
-  template: `
-    <lux-page-header
-      [title]="greeting()"
-      [subtitle]="subtitle()">
-      <button mat-stroked-button>
-        <mat-icon>file_download</mat-icon>
-        Export
-      </button>
-      <button mat-flat-button color="primary">
-        <mat-icon>add</mat-icon>
-        New reservation
-      </button>
-    </lux-page-header>
-
-    @if (liveBookings().length > 0) {
-      <div class="live-strip" role="status" aria-live="polite">
-        <div class="live-strip-pulse" aria-hidden="true">
-          <span class="dot"></span>
-          <span>LIVE</span>
-        </div>
-        <span class="live-strip-text">
-          {{ liveBookings().length }} new
-          {{ liveBookings().length === 1 ? 'booking' : 'bookings' }}
-          since you opened the dashboard
-        </span>
-        <div class="live-strip-spacer"></div>
-        <button class="live-strip-dismiss" type="button"
-                (click)="dismissLive()"
-                aria-label="Dismiss live booking notifications">
-          <mat-icon>close</mat-icon>
-        </button>
-      </div>
-    }
-
-    <div class="kpi-grid">
-      <lux-kpi-tile
-        label="Occupancy"
-        icon="meeting_room"
-        [value]="occupancyPct()"
-        suffix="%"
-        [delta]="occupancyDelta()"
-        deltaLabel="vs last week"
-        [loading]="loading()" />
-      <lux-kpi-tile
-        label="Revenue (today)"
-        icon="payments"
-        prefix="₾"
-        [value]="(revenueToday() | number:'1.0-0') ?? '0'"
-        [delta]="revenueDelta()"
-        deltaLabel="vs yesterday"
-        [loading]="loading()" />
-      <lux-kpi-tile
-        label="ADR"
-        icon="trending_up"
-        prefix="₾"
-        [value]="(adr() | number:'1.0-0') ?? '0'"
-        [delta]="adrDelta()"
-        deltaLabel="MTD"
-        [loading]="loading()" />
-      <lux-kpi-tile
-        label="Arrivals today"
-        icon="flight_land"
-        [value]="arrivalsToday()"
-        [delta]="0"
-        [loading]="loading()" />
-      <lux-kpi-tile
-        label="Departures today"
-        icon="flight_takeoff"
-        [value]="departuresToday()"
-        [delta]="0"
-        [loading]="loading()" />
-      <lux-kpi-tile
-        label="In-house guests"
-        icon="hotel"
-        [value]="inHouse()"
-        [delta]="0"
-        [loading]="loading()" />
-    </div>
-
-    <div class="two-col">
-      <section class="surface card">
-        <header class="card-header">
-          <div>
-            <h3>Room status</h3>
-            <p class="muted">Live snapshot across the property</p>
-          </div>
-          <a class="link">View room map →</a>
-        </header>
-        <div class="status-grid">
-          @for (s of roomStatusBreakdown(); track s.status) {
-            <div class="status-row">
-              <lux-status-chip [variant]="statusVariant(s.status)" [label]="s.label">
-                {{ s.label }}
-              </lux-status-chip>
-              <div class="bar">
-                <div class="bar-fill" [style.width.%]="s.pct" [attr.data-status]="s.status"></div>
-              </div>
-              <span class="count tabular-nums">{{ s.count }}</span>
-            </div>
-          }
-        </div>
-      </section>
-
-      <section class="surface card">
-        <header class="card-header">
-          <div>
-            <h3>Today at a glance</h3>
-            <p class="muted">Front-desk priorities</p>
-          </div>
-        </header>
-        <ul class="agenda">
-          <li>
-            <div class="agenda-icon" data-tone="info"><mat-icon>flight_land</mat-icon></div>
-            <div class="agenda-body">
-              <div class="agenda-title">{{ arrivalsToday() }} arrivals expected</div>
-              <div class="agenda-meta">
-                First check-in {{ checkInTime() }}
-                @if (vipArrivalsToday() > 0) {
-                  · {{ vipArrivalsToday() }} VIP {{ vipArrivalsToday() === 1 ? 'guest' : 'guests' }}
-                }
-              </div>
-            </div>
-            <span class="agenda-chip">→</span>
-          </li>
-          <li>
-            <div class="agenda-icon" data-tone="warning"><mat-icon>flight_takeoff</mat-icon></div>
-            <div class="agenda-body">
-              <div class="agenda-title">{{ departuresToday() }} departures</div>
-              <div class="agenda-meta">
-                {{ departuresToday() }} {{ departuresToday() === 1 ? 'room' : 'rooms' }} to flip by {{ checkOutTime() }}
-              </div>
-            </div>
-            <span class="agenda-chip">→</span>
-          </li>
-          <li>
-            <div class="agenda-icon" data-tone="success"><mat-icon>cleaning_services</mat-icon></div>
-            <div class="agenda-body">
-              <div class="agenda-title">{{ cleaningCount() }} rooms in housekeeping</div>
-              <div class="agenda-meta">
-                @if (avgCleaningTime() > 0) {
-                  Avg cleaning time today: {{ avgCleaningTime() }} min
-                } @else {
-                  No completed tasks yet today
-                }
-              </div>
-            </div>
-            <span class="agenda-chip">→</span>
-          </li>
-          <li>
-            <div class="agenda-icon" data-tone="danger"><mat-icon>build</mat-icon></div>
-            <div class="agenda-body">
-              <div class="agenda-title">{{ openMaintenanceCount() }} open maintenance ticket{{ openMaintenanceCount() === 1 ? '' : 's' }}</div>
-              <div class="agenda-meta">
-                @if (topMaintenanceTicket(); as ticket) {
-                  {{ ticket.priorityLabel }} priority — {{ ticket.title }}{{ ticket.room ? ', ' + ticket.room : '' }}
-                } @else {
-                  No open issues
-                }
-              </div>
-            </div>
-            <span class="agenda-chip">→</span>
-          </li>
-        </ul>
-      </section>
-    </div>
-
-    <section class="surface card mt-6">
-      <header class="card-header">
-        <div>
-          <h3>Recent reservations</h3>
-          <p class="muted">{{ recentReservations().length }} most recent bookings across all sources</p>
-        </div>
-        <a class="link">All reservations →</a>
-      </header>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Confirmation</th>
-            <th>Status</th>
-            <th>Check-in</th>
-            <th>Nights</th>
-            <th>Source</th>
-            <th class="num">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (r of recentReservations(); track r.id) {
-            <tr>
-              <td class="mono">{{ r.confirmationNumber }}</td>
-              <td>
-                <lux-status-chip [variant]="resStatusVariant(r.status)">
-                  {{ statusLabel(r.status) }}
-                </lux-status-chip>
-              </td>
-              <td class="tabular-nums">{{ r.checkIn | date:'MMM d' }}</td>
-              <td class="tabular-nums">{{ r.nights }}</td>
-              <td><span class="source">{{ r.source }}</span></td>
-              <td class="num tabular-nums">₾{{ r.totalAmount | number:'1.0-0' }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
-      <div class="show-more-row">
-        @if (reservationLimit() < reservations().length) {
-          <button mat-button (click)="showMoreReservations()">
-            Show more
-            <mat-icon>expand_more</mat-icon>
-          </button>
-        }
-        @if (reservationLimit() > 8) {
-          <button mat-button (click)="showLessReservations()">
-            Show less
-            <mat-icon>expand_less</mat-icon>
-          </button>
-        }
-        <span class="show-more-count">Showing {{ recentReservations().length }} of {{ reservations().length }}</span>
-      </div>
-    </section>
-  `,
-  styles: [`
-    .kpi-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: var(--space-4);
-      margin-bottom: var(--space-6);
-    }
-
-    .two-col {
-      display: grid;
-      grid-template-columns: 1.4fr 1fr;
-      gap: var(--space-4);
-    }
-    @media (max-width: 1024px) { .two-col { grid-template-columns: 1fr; } }
-
-    .card { padding: var(--space-5); }
-    .card-header {
-      display: flex; justify-content: space-between; align-items: flex-start;
-      margin-bottom: var(--space-4);
-    }
-    .card-header h3 { font-size: var(--text-lg); margin: 0; }
-    .muted { color: var(--text-muted); font-size: var(--text-xs); margin: 2px 0 0; }
-    .link { font-size: var(--text-xs); color: var(--primary); font-weight: 500; }
-
-    /* Status bars */
-    .status-grid { display: flex; flex-direction: column; gap: var(--space-3); }
-    .status-row {
-      display: grid;
-      grid-template-columns: 110px 1fr 32px;
-      align-items: center;
-      gap: var(--space-3);
-    }
-    .bar {
-      height: 8px;
-      background: var(--surface-2);
-      border-radius: var(--radius-full);
-      overflow: hidden;
-    }
-    .bar-fill {
-      height: 100%;
-      border-radius: var(--radius-full);
-      transition: width var(--t-base);
-    }
-    .bar-fill[data-status="available"]   { background: var(--success); }
-    .bar-fill[data-status="occupied"]    { background: var(--info); }
-    .bar-fill[data-status="cleaning"]    { background: var(--accent); }
-    .bar-fill[data-status="maintenance"] { background: var(--danger); }
-    .bar-fill[data-status="reserved"]    { background: var(--warning); }
-    .bar-fill[data-status="blocked"]     { background: var(--text-subtle); }
-    .count { text-align: right; font-weight: 600; font-size: var(--text-sm); }
-
-    /* Agenda */
-    .agenda { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-1); }
-    .agenda li {
-      display: flex; align-items: center; gap: var(--space-3);
-      padding: var(--space-3);
-      border-radius: var(--radius-md);
-      cursor: pointer;
-      transition: background var(--t-fast);
-    }
-    .agenda li:hover { background: var(--surface-2); }
-    .agenda-icon {
-      width: 36px; height: 36px; border-radius: var(--radius-md);
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-    }
-    .agenda-icon[data-tone="info"]    { background: var(--info-bg); color: var(--info); }
-    .agenda-icon[data-tone="warning"] { background: var(--warning-bg); color: var(--warning); }
-    .agenda-icon[data-tone="success"] { background: var(--success-bg); color: var(--success); }
-    .agenda-icon[data-tone="danger"]  { background: var(--danger-bg); color: var(--danger); }
-    .agenda-icon mat-icon { font-size: 18px; width: 18px; height: 18px; }
-    .agenda-body { flex: 1; }
-    .agenda-title { font-size: var(--text-sm); font-weight: 500; }
-    .agenda-meta { font-size: var(--text-xs); color: var(--text-muted); margin-top: 2px; }
-    .agenda-chip { color: var(--text-subtle); }
-
-    /* Table */
-    .table { width: 100%; border-collapse: collapse; }
-    .table th, .table td {
-      padding: var(--space-3) var(--space-3);
-      text-align: left;
-      border-bottom: 1px solid var(--border);
-      font-size: var(--text-sm);
-    }
-    .table th {
-      font-size: var(--text-xs);
-      color: var(--text-muted);
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
-    .table tr:last-child td { border-bottom: none; }
-    .table .num { text-align: right; }
-    .source {
-      font-size: var(--text-xs);
-      text-transform: capitalize;
-      color: var(--text-muted);
-    }
-
-    .show-more-row {
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
-      padding: var(--space-3) var(--space-3) 0;
-      border-top: 1px solid var(--border);
-      margin-top: var(--space-2);
-    }
-    .show-more-count {
-      margin-left: auto;
-      font-size: var(--text-xs);
-      color: var(--text-subtle);
-    }
-
-    /* ── Live bookings strip ─────────────────────────────────── */
-    .live-strip {
-      display: flex; align-items: center; gap: var(--space-3);
-      padding: var(--space-3) var(--space-4);
-      margin-bottom: var(--space-4);
-      background: linear-gradient(90deg,
-        rgba(74, 124, 89, 0.10),
-        rgba(74, 124, 89, 0.04));
-      border: 1px solid rgba(74, 124, 89, 0.25);
-      border-radius: var(--radius-md);
-      font-size: var(--text-sm);
-      animation: live-strip-in 320ms cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    .live-strip-pulse {
-      display: inline-flex; align-items: center; gap: 6px;
-      font-size: 10px; font-weight: 700; letter-spacing: 0.14em;
-      color: var(--success);
-    }
-    .live-strip-pulse .dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: var(--success);
-      box-shadow: 0 0 0 0 rgba(74, 124, 89, 0.5);
-      animation: live-pulse 1.8s ease-out infinite;
-    }
-    .live-strip-text { color: var(--text); font-weight: 500; }
-    .live-strip-spacer { flex: 1; }
-    .live-strip-dismiss {
-      background: transparent; border: none;
-      width: 28px; height: 28px;
-      display: flex; align-items: center; justify-content: center;
-      border-radius: var(--radius-sm);
-      color: var(--text-muted);
-      cursor: pointer;
-    }
-    .live-strip-dismiss:hover { background: rgba(0,0,0,0.05); color: var(--text); }
-    .live-strip-dismiss mat-icon {
-      font-size: 16px !important; width: 16px !important; height: 16px !important;
-    }
-    @keyframes live-pulse {
-      0%   { box-shadow: 0 0 0 0   rgba(74, 124, 89, 0.55); }
-      70%  { box-shadow: 0 0 0 8px rgba(74, 124, 89, 0);    }
-      100% { box-shadow: 0 0 0 0   rgba(74, 124, 89, 0);    }
-    }
-    @keyframes live-strip-in {
-      from { opacity: 0; transform: translateY(-4px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .live-strip { animation: none; }
-      .live-strip-pulse .dot { animation: none; }
-    }
-  `],
+  templateUrl: './dashboard.component.html',
+  styleUrl: './dashboard.component.scss',
 })
 export class DashboardComponent implements OnDestroy {
   private ctx          = inject(PropertyContextService);
+  private router       = inject(Router);
   private roomSvc      = inject(ROOM_SERVICE);
   private resSvc       = inject(RESERVATION_SERVICE);
   private guestSvc     = inject(GUEST_SERVICE);
@@ -765,5 +385,60 @@ export class DashboardComponent implements OnDestroy {
       [ReservationStatus.Cancelled]:  'Cancelled',
       [ReservationStatus.NoShow]:     'No show',
     } as Record<string, string>)[s] ?? s;
+  }
+
+  /* ── Header actions ──────────────────────────────────────── */
+
+  newReservation(): void {
+    this.router.navigate(['/app/calendar']);
+  }
+
+  exportCsv(): void {
+    const rows = this.reservations();
+    if (!rows.length) return;
+
+    const headers = [
+      'Confirmation #', 'Guest ID', 'Room ID', 'Room Type ID', 'Status',
+      'Source', 'Check-in', 'Check-out', 'Nights',
+      'Adults', 'Children', 'Total Amount', 'Balance', 'Created At',
+    ];
+
+    const escape = (v: unknown) => {
+      const s = v == null ? '' : String(v);
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    const toDate = (d: Date | string | undefined) =>
+      d instanceof Date ? d.toISOString().slice(0, 10) : (d ?? '');
+
+    const lines = [
+      headers.join(','),
+      ...rows.map(r => [
+        r.confirmationNumber,
+        r.guestId,
+        r.roomId ?? '',
+        r.roomTypeId,
+        r.status,
+        r.source,
+        toDate(r.checkIn),
+        toDate(r.checkOut),
+        r.nights,
+        r.adults,
+        r.children,
+        r.totalAmount,
+        r.balance,
+        toDate(r.createdAt),
+      ].map(escape).join(',')),
+    ];
+
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const date = new Date().toISOString().slice(0, 10);
+    a.href     = url;
+    a.download = `reservations-${date}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 }

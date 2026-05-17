@@ -1,0 +1,126 @@
+<div class="guests-page">
+
+  <header class="g-header">
+    <div>
+      <h1 class="page-title">Guests</h1>
+      <p class="page-sub">
+        {{ filtered().length }} of {{ guests().length }}
+        <span class="dot">·</span>
+        {{ vipCount() }} VIP
+      </p>
+    </div>
+  </header>
+
+  <!-- Filters -->
+  <div class="filters">
+    <input
+      class="filter-input filter-input--search"
+      type="search"
+      placeholder="Search by name or email…"
+      [ngModel]="search()"
+      (ngModelChange)="search.set($event)" />
+
+    <div class="chip-group">
+      <button
+        class="filter-chip"
+        [class.active]="!vipFilter() && !tierFilter()"
+        (click)="clearFilters()">
+        All
+      </button>
+      <button
+        class="filter-chip filter-chip--vip"
+        [class.active]="vipFilter()"
+        (click)="toggleVip()">
+        ★ VIP only
+      </button>
+      <span class="chip-sep"></span>
+      @for (tier of allTiers; track tier) {
+        <button
+          class="filter-chip"
+          [class.active]="tierFilter() === tier"
+          [style.--c]="tierMeta(tier).color"
+          (click)="toggleTier(tier)">
+          {{ tierMeta(tier).label }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    @if (loading()) {
+      <div class="loading">Loading guests…</div>
+    } @else if (!filtered().length) {
+      <div class="empty">
+        <p>No guests match your filters.</p>
+        @if (hasActiveFilters()) {
+          <button class="btn-link" (click)="clearFilters()">Clear filters</button>
+        }
+      </div>
+    } @else {
+      <table class="g-table">
+        <thead>
+          <tr>
+            <th>Guest</th>
+            <th>Contact</th>
+            <th>Nationality</th>
+            <th class="num-col">Stays</th>
+            <th class="num-col">Total spent</th>
+            <th>Last stay</th>
+            <th>Loyalty</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (g of filtered(); track g.id) {
+            <tr class="row" (click)="open(g.id)">
+              <td>
+                <div class="guest-cell">
+                  <div class="g-avatar">{{ initials(g) }}</div>
+                  <div class="g-name-block">
+                    <span class="g-name">
+                      {{ g.firstName }} {{ g.lastName }}
+                      @if (g.isVip) { <span class="vip-tag">VIP</span> }
+                    </span>
+                    @if (g.tags.length) {
+                      <span class="g-tags-line">
+                        @for (t of g.tags.slice(0, 2); track t) {
+                          <span class="g-tag">{{ t }}</span>
+                        }
+                        @if (g.tags.length > 2) {
+                          <span class="g-tag g-tag--more">+{{ g.tags.length - 2 }}</span>
+                        }
+                      </span>
+                    }
+                  </div>
+                </div>
+              </td>
+              <td class="contact-cell">
+                <div class="contact-email">{{ g.email }}</div>
+                <div class="contact-phone">{{ g.phone }}</div>
+              </td>
+              <td>{{ g.nationality }}</td>
+              <td class="num-col">{{ g.totalStays }}</td>
+              <td class="num-col">{{ g.totalSpent | currency:'GEL':'symbol-narrow':'1.0-0' }}</td>
+              <td class="muted">
+                {{ g.lastStayDate ? (g.lastStayDate | date:'MMM y') : '—' }}
+              </td>
+              <td>
+                @if (g.loyaltyTier) {
+                  <span class="tier-pill"
+                        [style.color]="tierMeta(g.loyaltyTier).color"
+                        [style.background]="tierMeta(g.loyaltyTier).bg">
+                    {{ tierMeta(g.loyaltyTier).label }}
+                  </span>
+                  <span class="loyalty-pts">{{ g.loyaltyPoints }} pts</span>
+                } @else {
+                  <span class="muted">—</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+
+</div>

@@ -1,0 +1,175 @@
+@if (layout.mobileOpen()) {
+  <div class="overlay" (click)="layout.closeMobile()"></div>
+}
+
+<div class="shell" [class.sidebar-collapsed]="collapsed()">
+
+  <!-- ══ SIDEBAR ══════════════════════════════════════════ -->
+  <aside class="sidebar" [class.mobile-open]="layout.mobileOpen()">
+
+    <div class="brand">
+      <div class="brand-mark">L</div>
+      @if (!collapsed()) {
+        <div class="brand-text">
+          <span class="brand-name">LuxStay</span>
+          <span class="brand-sub">COLLECTION</span>
+        </div>
+      }
+    </div>
+
+    <nav class="nav">
+      @for (item of visibleNav(); track item.route) {
+        @if (item.dividerBefore) {
+          <div class="nav-divider"></div>
+        }
+        <a class="nav-item"
+           [routerLink]="item.route"
+           routerLinkActive="active"
+           [matTooltip]="collapsed() ? item.label : ''"
+           matTooltipPosition="right"
+           (click)="layout.closeMobile()">
+          <mat-icon class="nav-icon">{{ item.icon }}</mat-icon>
+          @if (!collapsed()) {
+            <span class="nav-label">{{ item.label }}</span>
+          }
+        </a>
+      }
+    </nav>
+
+    <button class="collapse-btn"
+            (click)="toggleCollapse()"
+            [matTooltip]="collapsed() ? 'Expand sidebar' : 'Collapse sidebar'"
+            matTooltipPosition="right">
+      <mat-icon>{{ collapsed() ? 'chevron_right' : 'chevron_left' }}</mat-icon>
+    </button>
+  </aside>
+
+  <!-- ══ MAIN ══════════════════════════════════════════════ -->
+  <div class="main">
+
+    <!-- TOP BAR -->
+    <header class="topbar">
+
+      <div class="topbar-left">
+        <button mat-icon-button disableRipple
+                class="mobile-menu-btn"
+                (click)="layout.toggleMobile()"
+                aria-label="Toggle navigation">
+          <mat-icon>menu</mat-icon>
+        </button>
+
+        <div class="search-wrap">
+          <mat-icon class="search-icon">search</mat-icon>
+          <input class="search-input"
+                 type="text"
+                 [(ngModel)]="searchQuery"
+                 placeholder="Search reservations, guests, rooms…"
+                 (keydown.escape)="searchQuery = ''" />
+          <kbd class="search-kbd">⌘K</kbd>
+        </div>
+      </div>
+
+      <div class="topbar-right">
+
+        <!-- Property selector -->
+        <button type="button" class="property-btn" [matMenuTriggerFor]="propMenu">
+          <div class="property-info">
+            <span class="property-collection">LUXSTAY COLLECTION</span>
+            <span class="property-name">{{ ctx.active()?.name ?? 'Select property' }}</span>
+          </div>
+          <mat-icon class="chevron-icon">expand_more</mat-icon>
+        </button>
+
+        <mat-menu #propMenu="matMenu" xPosition="before">
+          @for (p of ctx.properties(); track p.id) {
+            <button mat-menu-item (click)="ctx.setActive(p.id)">
+              @if (p.id === ctx.activeId()) {
+                <mat-icon style="color:var(--accent)">check</mat-icon>
+              } @else {
+                <mat-icon style="opacity:0">check</mat-icon>
+              }
+              <span>{{ p.name }}</span>
+            </button>
+          }
+        </mat-menu>
+
+        <div class="topbar-sep"></div>
+
+        <!-- Notifications -->
+        <button mat-icon-button disableRipple
+                class="notif-btn"
+                matTooltip="Notifications"
+                [matMenuTriggerFor]="notifMenu"
+                [attr.aria-label]="notifAriaLabel()">
+          <mat-icon>notifications</mat-icon>
+          @if (notifCount() > 0) {
+            <span class="notif-badge" aria-hidden="true">{{ notifCount() }}</span>
+          }
+        </button>
+
+        <mat-menu #notifMenu="matMenu" xPosition="before" class="notif-menu">
+          <div class="notif-panel-header" (click)="$event.stopPropagation()">
+            <span class="notif-panel-title">Notifications</span>
+            @if (notifCount() > 0) {
+              <span class="notif-panel-badge">{{ notifCount() }}</span>
+            }
+          </div>
+          @if (notifCount() === 0) {
+            <div class="notif-empty" (click)="$event.stopPropagation()">
+              <mat-icon>notifications_none</mat-icon>
+              <span>You're all caught up.</span>
+            </div>
+          } @else {
+            @for (n of recentBookings(); track n.reservationId) {
+              <button mat-menu-item class="notif-item-btn"
+                      (click)="goToReservation(n.reservationId)">
+                <div class="notif-item">
+                  <span class="notif-dot success"></span>
+                  <div class="notif-content">
+                    <div class="notif-title">New booking · {{ n.confirmationNumber }}</div>
+                    <div class="notif-meta">{{ n.guestName }} · {{ n.roomTypeName }}</div>
+                  </div>
+                </div>
+              </button>
+            }
+          }
+        </mat-menu>
+
+        <div class="topbar-sep"></div>
+
+        <!-- User -->
+        <button type="button" class="user-btn" [matMenuTriggerFor]="userMenu">
+          <div class="avatar">{{ auth.initials() }}</div>
+          <div class="user-info">
+            <span class="user-name">{{ auth.user()?.firstName }} {{ auth.user()?.lastName }}</span>
+            <span class="user-role">{{ auth.role() }}</span>
+          </div>
+          <mat-icon class="chevron-icon">expand_more</mat-icon>
+        </button>
+
+        <mat-menu #userMenu="matMenu">
+          <button mat-menu-item routerLink="/app/settings">
+            <mat-icon>manage_accounts</mat-icon>
+            <span>Account settings</span>
+          </button>
+          <button mat-menu-item>
+            <mat-icon>help_outline</mat-icon>
+            <span>Help &amp; support</span>
+          </button>
+          <mat-divider></mat-divider>
+          <button mat-menu-item (click)="auth.logout()">
+            <mat-icon style="color:#DC2626">logout</mat-icon>
+            <span style="color:#DC2626">Sign out</span>
+          </button>
+        </mat-menu>
+
+      </div>
+    </header>
+
+    <!-- PAGE CONTENT -->
+    <main class="content">
+      <router-outlet />
+    </main>
+
+  </div>
+</div>

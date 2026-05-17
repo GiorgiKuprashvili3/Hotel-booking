@@ -1,0 +1,421 @@
+<div class="detail-page">
+
+  @if (loading()) {
+    <div class="loading">Loading reservation…</div>
+  } @else if (!reservation()) {
+    <div class="loading">Reservation not found. <a routerLink="/app/reservations">Back to list</a></div>
+  } @else {
+
+    <!-- Breadcrumb -->
+    <nav class="crumbs">
+      <a routerLink="/app/reservations" class="crumb">Reservations</a>
+      <span class="crumb-sep">/</span>
+      <span class="crumb crumb--current">{{ reservation()!.confirmationNumber }}</span>
+    </nav>
+
+    <!-- Header -->
+    <header class="dp-header">
+      <div class="dp-header__main">
+        <div class="dp-title-row">
+          <h1 class="dp-title">{{ reservation()!.confirmationNumber }}</h1>
+          <span class="status-pill"
+                [style.color]="meta(reservation()!.status).color"
+                [style.background]="meta(reservation()!.status).bg">
+            {{ meta(reservation()!.status).label }}
+          </span>
+          @if (guest()?.isVip) {
+            <span class="vip-tag">VIP</span>
+          }
+        </div>
+        <p class="dp-subtitle">
+          <a class="link" [routerLink]="['/app/guests', reservation()!.guestId]">
+            {{ guest()?.firstName }} {{ guest()?.lastName }}
+          </a>
+          <span class="dot">·</span>
+          {{ reservation()!.checkIn | date:'MMM d' }}
+          <span class="arrow">→</span>
+          {{ reservation()!.checkOut | date:'MMM d, y' }}
+          ({{ reservation()!.nights }} {{ reservation()!.nights === 1 ? 'night' : 'nights' }})
+        </p>
+      </div>
+      <div class="dp-header__actions">
+        @if (canCheckIn()) {
+          <button class="btn-primary" (click)="openCheckIn()">
+            <svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 7h8M7 4l3 3-3 3M10 2h2v10h-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+            Check in
+          </button>
+        }
+        @if (canCheckOut()) {
+          <button class="btn-primary btn-primary--warn" (click)="openCheckOut()">
+            <svg width="14" height="14" viewBox="0 0 14 14"><path d="M12 7H4M7 4l-3 3 3 3M4 2H2v10h2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+            Check out
+          </button>
+        }
+        @if (canCancel()) {
+          <button class="btn-danger" (click)="cancelReservation()">Cancel</button>
+        }
+      </div>
+    </header>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      @for (t of tabs; track t.id) {
+        <button
+          class="tab"
+          [class.active]="activeTab() === t.id"
+          (click)="activeTab.set(t.id)">
+          {{ t.label }}
+          @if (t.id === 'documents' && documents().length > 0) {
+            <span class="tab-badge">{{ documents().length }}</span>
+          }
+        </button>
+      }
+    </div>
+
+    <!-- Tab content -->
+    <div class="tab-content">
+
+      @if (activeTab() === 'overview') {
+        <div class="grid-2">
+          <!-- Stay info card -->
+          <section class="card">
+            <h3 class="card-title">Stay details</h3>
+            <dl class="stay-list">
+              <div class="stay-row">
+                <dt>Check-in</dt>
+                <dd>{{ reservation()!.checkIn | date:'EEE, MMM d, y' }} · 3:00 PM</dd>
+              </div>
+              <div class="stay-row">
+                <dt>Check-out</dt>
+                <dd>{{ reservation()!.checkOut | date:'EEE, MMM d, y' }} · 11:00 AM</dd>
+              </div>
+              <div class="stay-row">
+                <dt>Nights</dt>
+                <dd>{{ reservation()!.nights }}</dd>
+              </div>
+              <div class="stay-row">
+                <dt>Guests</dt>
+                <dd>{{ reservation()!.adults }} {{ reservation()!.adults === 1 ? 'adult' : 'adults' }}@if (reservation()!.children > 0) {, {{ reservation()!.children }} {{ reservation()!.children === 1 ? 'child' : 'children' }}}</dd>
+              </div>
+              <div class="stay-row">
+                <dt>Room type</dt>
+                <dd>{{ typeName() }}</dd>
+              </div>
+              <div class="stay-row">
+                <dt>Room</dt>
+                <dd>
+                  @if (room()) {
+                    Room {{ room()!.number }} · Floor {{ room()!.floor }}
+                  } @else {
+                    <span class="muted">Not assigned</span>
+                  }
+                </dd>
+              </div>
+              <div class="stay-row">
+                <dt>Source</dt>
+                <dd>{{ srcLabel(reservation()!.source) }}</dd>
+              </div>
+              <div class="stay-row">
+                <dt>Booked</dt>
+                <dd>{{ reservation()!.createdAt | date:'MMM d, y' }}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <!-- Guest summary card -->
+          <section class="card">
+            <h3 class="card-title">Guest</h3>
+            @if (guest(); as g) {
+              <div class="guest-summary">
+                <div class="guest-avatar">{{ initials() }}</div>
+                <div class="guest-summary__body">
+                  <div class="guest-summary__name">
+                    {{ g.firstName }} {{ g.lastName }}
+                    @if (g.isVip) { <span class="vip-tag vip-tag--sm">VIP</span> }
+                  </div>
+                  <div class="guest-summary__meta">{{ g.nationality }}</div>
+                </div>
+              </div>
+              <dl class="stay-list">
+                <div class="stay-row">
+                  <dt>Email</dt>
+                  <dd>{{ g.email }}</dd>
+                </div>
+                <div class="stay-row">
+                  <dt>Phone</dt>
+                  <dd>{{ g.phone }}</dd>
+                </div>
+                <div class="stay-row">
+                  <dt>{{ g.idType | titlecase }}</dt>
+                  <dd class="mono">{{ g.idNumber || '—' }}</dd>
+                </div>
+                <div class="stay-row">
+                  <dt>Total stays</dt>
+                  <dd>{{ g.totalStays }}</dd>
+                </div>
+                @if (g.loyaltyTier) {
+                  <div class="stay-row">
+                    <dt>Loyalty</dt>
+                    <dd class="loyalty">{{ g.loyaltyTier | titlecase }} · {{ g.loyaltyPoints }} pts</dd>
+                  </div>
+                }
+              </dl>
+              <a class="btn-link-block" [routerLink]="['/app/guests', g.id]">View full profile →</a>
+            }
+          </section>
+
+          <!-- Pricing card -->
+          <section class="card card--span">
+            <h3 class="card-title">Pricing</h3>
+            <div class="pricing-grid">
+              <div class="price-tile">
+                <span class="price-lbl">Room charge</span>
+                <span class="price-val">{{ reservation()!.totalRoomCharge | currency:'GEL':'symbol-narrow':'1.2-2' }}</span>
+              </div>
+              <div class="price-tile">
+                <span class="price-lbl">Tax</span>
+                <span class="price-val">{{ reservation()!.totalTax | currency:'GEL':'symbol-narrow':'1.2-2' }}</span>
+              </div>
+              <div class="price-tile">
+                <span class="price-lbl">Extras</span>
+                <span class="price-val">{{ reservation()!.totalExtras | currency:'GEL':'symbol-narrow':'1.2-2' }}</span>
+              </div>
+              <div class="price-tile price-tile--accent">
+                <span class="price-lbl">Total</span>
+                <span class="price-val">{{ reservation()!.totalAmount | currency:'GEL':'symbol-narrow':'1.2-2' }}</span>
+              </div>
+              <div class="price-tile">
+                <span class="price-lbl">Paid</span>
+                <span class="price-val price-val--paid">−{{ reservation()!.totalPaid | currency:'GEL':'symbol-narrow':'1.2-2' }}</span>
+              </div>
+              <div class="price-tile" [class.price-tile--danger]="reservation()!.balance > 0">
+                <span class="price-lbl">Balance</span>
+                <span class="price-val">{{ reservation()!.balance | currency:'GEL':'symbol-narrow':'1.2-2' }}</span>
+              </div>
+            </div>
+          </section>
+        </div>
+      }
+
+      @if (activeTab() === 'folio') {
+        @if (folio(); as f) {
+          <section class="card">
+            <div class="folio-toolbar">
+              <h3 class="card-title" style="margin: 0;">Charges</h3>
+              <button class="btn-secondary" (click)="showChargeForm.set(!showChargeForm())">
+                @if (showChargeForm()) { Cancel } @else { + Post charge }
+              </button>
+            </div>
+
+            @if (showChargeForm()) {
+              <div class="post-form">
+                <select class="field-input" [ngModel]="newCharge.category" (ngModelChange)="newCharge.category = $event">
+                  <option value="food">Food</option>
+                  <option value="minibar">Minibar</option>
+                  <option value="service">Service</option>
+                  <option value="misc">Misc</option>
+                </select>
+                <input class="field-input" type="text" placeholder="Description"
+                       [ngModel]="newCharge.description" (ngModelChange)="newCharge.description = $event" />
+                <input class="field-input field-input--num" type="number" placeholder="Qty" min="1"
+                       [ngModel]="newCharge.quantity" (ngModelChange)="newCharge.quantity = $event" />
+                <input class="field-input field-input--num" type="number" placeholder="Unit price" min="0" step="0.01"
+                       [ngModel]="newCharge.unitPrice" (ngModelChange)="newCharge.unitPrice = $event" />
+                <button class="btn-primary"
+                        [disabled]="!canPostCharge()"
+                        (click)="postCharge()">Post</button>
+              </div>
+            }
+
+            <div class="folio-table">
+              @if (f.items.length === 0) {
+                <div class="empty-row">No charges yet.</div>
+              }
+              @for (item of f.items; track item.id) {
+                <div class="folio-row">
+                  <div class="folio-row__left">
+                    <div class="folio-desc">{{ item.description }}</div>
+                    <div class="folio-meta">
+                      <span class="folio-cat" [attr.data-cat]="item.category">{{ item.category }}</span>
+                      <span>{{ item.date | date:'MMM d' }}</span>
+                      @if (item.quantity > 1) { <span>× {{ item.quantity }}</span> }
+                    </div>
+                  </div>
+                  <div class="folio-amt">{{ item.amount | currency:'GEL':'symbol-narrow':'1.2-2' }}</div>
+                </div>
+              }
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="folio-toolbar">
+              <h3 class="card-title" style="margin: 0;">Payments</h3>
+              <button class="btn-secondary" (click)="showPaymentForm.set(!showPaymentForm())">
+                @if (showPaymentForm()) { Cancel } @else { + Record payment }
+              </button>
+            </div>
+
+            @if (showPaymentForm()) {
+              <div class="post-form">
+                <input class="field-input field-input--num" type="number" placeholder="Amount" min="0" step="0.01"
+                       [ngModel]="newPayment.amount" (ngModelChange)="newPayment.amount = $event" />
+                <select class="field-input" [ngModel]="newPayment.method" (ngModelChange)="newPayment.method = $event">
+                  <option [value]="PaymentMethod.Card">Card</option>
+                  <option [value]="PaymentMethod.Cash">Cash</option>
+                  <option [value]="PaymentMethod.BankTransfer">Bank transfer</option>
+                  <option [value]="PaymentMethod.Voucher">Voucher</option>
+                </select>
+                <input class="field-input" type="text" placeholder="Reference (optional)"
+                       [ngModel]="newPayment.reference" (ngModelChange)="newPayment.reference = $event" />
+                <button class="btn-primary"
+                        [disabled]="!canRecordPayment()"
+                        (click)="recordPayment()">Record</button>
+              </div>
+            }
+
+            <div class="folio-table">
+              @if (f.payments.length === 0) {
+                <div class="empty-row">No payments recorded yet.</div>
+              }
+              @for (p of f.payments; track p.id) {
+                <div class="folio-row folio-row--payment">
+                  <div class="folio-row__left">
+                    <div class="folio-desc">{{ payMethodLabel(p.method) }}</div>
+                    <div class="folio-meta">
+                      <span>{{ p.date | date:'MMM d, HH:mm' }}</span>
+                      @if (p.reference) { <span class="folio-ref">{{ p.reference }}</span> }
+                    </div>
+                  </div>
+                  <div class="folio-amt folio-amt--pay">−{{ p.amount | currency:'GEL':'symbol-narrow':'1.2-2' }}</div>
+                </div>
+              }
+            </div>
+          </section>
+
+          <div class="totals-card">
+            <div class="totals-row">
+              <span>Total</span>
+              <span>{{ reservation()!.totalAmount | currency:'GEL':'symbol-narrow':'1.2-2' }}</span>
+            </div>
+            <div class="totals-row">
+              <span>Paid</span>
+              <span>−{{ reservation()!.totalPaid | currency:'GEL':'symbol-narrow':'1.2-2' }}</span>
+            </div>
+            <div class="totals-row totals-row--balance">
+              <span>Balance</span>
+              <span [class.balance-owed]="reservation()!.balance > 0"
+                    [class.balance-ok]="reservation()!.balance <= 0">
+                {{ reservation()!.balance | currency:'GEL':'symbol-narrow':'1.2-2' }}
+              </span>
+            </div>
+          </div>
+        } @else {
+          <div class="loading">Loading folio…</div>
+        }
+      }
+
+      @if (activeTab() === 'notes') {
+        <section class="card">
+          <h3 class="card-title">Special requests</h3>
+          <p class="card-help">Visible to all staff. Forwarded from the booking source.</p>
+          <textarea
+            class="notes-textarea"
+            rows="4"
+            placeholder="e.g. 'Late check-in, anniversary trip, please prepare champagne'"
+            [ngModel]="specialRequestsDraft()"
+            (ngModelChange)="specialRequestsDraft.set($event)"></textarea>
+        </section>
+
+        <section class="card">
+          <h3 class="card-title">Internal notes</h3>
+          <p class="card-help">Staff-only. Use for billing notes, follow-ups, complaints.</p>
+          <textarea
+            class="notes-textarea notes-textarea--internal"
+            rows="6"
+            placeholder="e.g. 'Guest requested room change to higher floor — comp upgrade approved 2026-05-10 by JS.'"
+            [ngModel]="internalNotesDraft()"
+            (ngModelChange)="internalNotesDraft.set($event)"></textarea>
+        </section>
+
+        <div class="notes-actions">
+          <button class="btn-secondary" (click)="resetNotes()" [disabled]="!notesDirty() || savingNotes()">
+            Discard
+          </button>
+          <button class="btn-primary" (click)="saveNotes()" [disabled]="!notesDirty() || savingNotes()">
+            @if (savingNotes()) { Saving… } @else { Save notes }
+          </button>
+        </div>
+      }
+
+      @if (activeTab() === 'documents') {
+        <section class="card">
+          <h3 class="card-title">Attached documents</h3>
+          <p class="card-help">
+            Drag-and-drop or click below to upload. Previews only — files are not stored on the server.
+          </p>
+
+          <label class="upload-zone">
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              multiple
+              hidden
+              (change)="onFiles($event)" />
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+              <path d="M16 22V8m0 0l-5 5m5-5l5 5M6 22v3a1 1 0 001 1h18a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="upload-text">Click to upload, or drag files here</span>
+            <span class="upload-hint">Images or PDFs · No actual storage in demo</span>
+          </label>
+
+          @if (documents().length > 0) {
+            <div class="docs-grid">
+              @for (d of documents(); track d.id) {
+                <div class="doc-tile">
+                  <div class="doc-preview">
+                    @if (d.type.startsWith('image/')) {
+                      <img [src]="d.dataUrl" [alt]="d.name" />
+                    } @else {
+                      <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+                        <path d="M10 4h16l8 8v24a4 4 0 01-4 4H10a4 4 0 01-4-4V8a4 4 0 014-4z" fill="var(--surface-2)" stroke="var(--border)" stroke-width="1.5"/>
+                        <path d="M26 4v8h8" stroke="var(--border)" stroke-width="1.5"/>
+                        <text x="22" y="28" fill="var(--text-muted)" font-size="9" text-anchor="middle" font-weight="600">PDF</text>
+                      </svg>
+                    }
+                  </div>
+                  <div class="doc-body">
+                    <div class="doc-name">{{ d.name }}</div>
+                    <div class="doc-meta">{{ formatBytes(d.size) }} · {{ d.uploadedAt | date:'MMM d, HH:mm' }}</div>
+                  </div>
+                  <button class="doc-del" (click)="removeDoc(d.id)" aria-label="Remove">
+                    <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                  </button>
+                </div>
+              }
+            </div>
+          }
+        </section>
+      }
+
+    </div>
+
+    <!-- Wizards -->
+    @if (showCheckInWizard()) {
+      <lux-check-in-wizard
+        [reservation]="reservation()!"
+        [guest]="guest()"
+        [rooms]="rooms()"
+        (completed)="onCheckedIn($event)"
+        (cancel)="showCheckInWizard.set(false)" />
+    }
+    @if (showCheckOutWizard()) {
+      <lux-check-out-wizard
+        [reservation]="reservation()!"
+        [guest]="guest()"
+        [folio]="folio()"
+        [roomNumber]="room()?.number ?? null"
+        (completed)="onCheckedOut($event)"
+        (cancel)="showCheckOutWizard.set(false)" />
+    }
+  }
+</div>

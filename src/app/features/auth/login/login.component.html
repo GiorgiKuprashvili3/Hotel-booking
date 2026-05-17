@@ -1,0 +1,71 @@
+<div class="page">
+  <!-- Brand panel -->
+  <aside class="brand">
+    <div class="brand-content">
+      <div class="logo">
+        <div class="logo-mark">L</div>
+        <span class="logo-name">LuxStay</span>
+      </div>
+      <h1 class="brand-title">Hospitality, refined.</h1>
+      <p class="brand-tag">
+        The property management system trusted by boutique hotels and
+        five-star resorts to orchestrate every guest experience.
+      </p>
+      <ul class="brand-features">
+        <li><mat-icon>check_circle</mat-icon> Real-time room availability</li>
+        <li><mat-icon>check_circle</mat-icon> Smart housekeeping workflows</li>
+        <li><mat-icon>check_circle</mat-icon> Revenue analytics that matter</li>
+        <li><mat-icon>check_circle</mat-icon> Multi-property orchestration</li>
+      </ul>
+    </div>
+    <div class="brand-deco"></div>
+  </aside>
+
+  <!-- Login panel -->
+  <section class="login">
+    <div class="login-inner">
+      <h2 class="login-title">Welcome back</h2>
+      <p class="login-sub">Sign in to your hotel dashboard.</p>
+
+      <!-- Real-looking login form (decorative, doesn't auth) -->
+      <form class="form" (submit)="$event.preventDefault()">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Email address</mat-label>
+          <input matInput type="email" [(ngModel)]="email" name="email" autocomplete="email" />
+          <mat-icon matSuffix>mail_outline</mat-icon>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Password</mat-label>
+          <input matInput type="password" [(ngModel)]="password" name="password" autocomplete="current-password" />
+          <mat-icon matSuffix>lock_outline</mat-icon>
+        </mat-form-field>
+
+        <button mat-flat-button color="primary" class="signin-btn" type="submit" disabled>
+          Sign in
+        </button>
+      </form>
+
+      <div class="divider"><span>Or try the demo as</span></div>
+
+      <div class="demo-cards">
+        @for (c of demoCards; track c.role) {
+          <button class="demo-card" (click)="loginAs(c.role)" [style.--card-accent]="c.accent">
+            <div class="demo-icon">
+              <mat-icon>{{ c.icon }}</mat-icon>
+            </div>
+            <div class="demo-text">
+              <div class="demo-title">{{ c.title }}</div>
+              <div class="demo-desc">{{ c.description }}</div>
+            </div>
+            <mat-icon class="demo-arrow">arrow_forward</mat-icon>
+          </button>
+        }
+      </div>
+
+      <p class="footer-note">
+        This is a portfolio demo. No real data, no real bookings, no payments processed.
+      </p>
+    </div>
+  </section>
+</div>

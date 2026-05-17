@@ -1,0 +1,171 @@
+<div class="cal-page">
+
+  <!-- ── Header ─────────────────────────────────── -->
+  <header class="cal-header">
+    <div class="cal-header__left">
+      <h1 class="cal-title">Reservation Calendar</h1>
+      <span class="cal-subtitle">{{ propertyCtx.active()?.name }}</span>
+    </div>
+
+    <div class="cal-header__controls">
+      <!-- Date range navigation -->
+      <div class="date-nav">
+        <button class="btn-icon" (click)="shiftDays(-30)" title="Back 30 days">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button class="btn-today" (click)="goToday()">Today</button>
+        <button class="btn-icon" (click)="shiftDays(30)" title="Forward 30 days">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Window size selector -->
+      <div class="window-select">
+        @for (w of windowOptions; track w.days) {
+          <button
+            class="btn-window"
+            [class.active]="windowDays() === w.days"
+            (click)="setWindow(w.days)">
+            {{ w.label }}
+          </button>
+        }
+      </div>
+    </div>
+
+    <div class="cal-header__right">
+      <!-- Filters toggle -->
+      <button class="btn-filters" [class.active]="showFilters()" (click)="showFilters.set(!showFilters())">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M2 4h12M4 8h8M6 12h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+        Filters
+        @if (activeFilterCount() > 0) {
+          <span class="filter-badge">{{ activeFilterCount() }}</span>
+        }
+      </button>
+    </div>
+  </header>
+
+  <!-- ── Filter bar ──────────────────────────────── -->
+  @if (showFilters()) {
+    <div class="filter-bar">
+      <!-- Room type filter -->
+      <div class="filter-group">
+        <span class="filter-label">Room Type</span>
+        <div class="filter-chips">
+          @for (rt of roomTypes(); track rt.id) {
+            <button
+              class="chip"
+              [class.active]="filters().roomTypeIds.includes(rt.id)"
+              (click)="toggleRoomType(rt.id)">
+              {{ rt.code }}
+            </button>
+          }
+        </div>
+      </div>
+
+      <!-- Status filter -->
+      <div class="filter-group">
+        <span class="filter-label">Status</span>
+        <div class="filter-chips">
+          @for (s of statusOptions; track s.value) {
+            <button
+              class="chip chip--status"
+              [class.active]="filters().statuses.includes(s.value)"
+              [style.--chip-color]="s.color"
+              (click)="toggleStatus(s.value)">
+              {{ s.label }}
+            </button>
+          }
+        </div>
+      </div>
+
+      <!-- Floor filter -->
+      @if (floors().length > 1) {
+        <div class="filter-group">
+          <span class="filter-label">Floor</span>
+          <div class="filter-chips">
+            @for (f of floors(); track f) {
+              <button
+                class="chip"
+                [class.active]="filters().floors.includes(f)"
+                (click)="toggleFloor(f)">
+                {{ f }}F
+              </button>
+            }
+          </div>
+        </div>
+      }
+
+      <button class="btn-clear" (click)="clearFilters()">Clear all</button>
+    </div>
+  }
+
+  <!-- ── Legend ─────────────────────────────────── -->
+  <div class="cal-legend">
+    @for (s of statusOptions; track s.value) {
+      <span class="legend-item">
+        <span class="legend-dot" [style.background]="s.color"></span>
+        {{ s.label }}
+      </span>
+    }
+    <span class="legend-item">
+      <span class="legend-dot legend-dot--weekend"></span>
+      Weekend
+    </span>
+  </div>
+
+  <!-- ── Grid ───────────────────────────────────── -->
+  <div class="cal-body">
+    @if (loading()) {
+      <div class="cal-loading">
+        <div class="spinner"></div>
+        <span>Loading reservations…</span>
+      </div>
+    } @else {
+      <app-calendar-grid
+        [rooms]="filteredRooms()"
+        [reservations]="filteredReservations()"
+        [roomTypes]="roomTypes()"
+        [startDate]="startDate()"
+        [windowDays]="windowDays()"
+        (reservationClick)="openDrawer($event)"
+        (reservationCreate)="handleCreate($event)"
+        (reservationMove)="handleMove($event)"
+        (reservationResize)="handleResize($event)"
+      />
+    }
+  </div>
+
+  <!-- ── Drawer ─────────────────────────────────── -->
+  @if (drawerReservation()) {
+    <app-reservation-drawer
+      [reservation]="drawerReservation()!"
+      [rooms]="allRooms()"
+      [roomTypes]="roomTypes()"
+      (close)="closeDrawer()"
+      (statusChange)="handleStatusChange($event)"
+    />
+  }
+
+  <!-- ── New Reservation Modal ──────────────────── -->
+  @if (pendingCreate(); as pc) {
+    <app-new-reservation-modal
+      [roomId]="pc.roomId"
+      [roomTypeId]="pc.roomTypeId"
+      [checkIn]="pc.checkIn"
+      [checkOut]="pc.checkOut"
+      [nights]="pc.nights"
+      [room]="getRoomById(pc.roomId)"
+      [roomType]="getRoomTypeById(pc.roomTypeId)"
+      [ratePlans]="getRatePlansForType(pc.roomTypeId)"
+      (confirm)="handleModalConfirm($event)"
+      (cancel)="pendingCreate.set(null)"
+    />
+  }
+
+</div>

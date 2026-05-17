@@ -1,0 +1,417 @@
+<div class="audit-page">
+
+  <!-- ── HEADER ─────────────────────────────────────────── -->
+  <header class="audit-header">
+    <div class="audit-title-block">
+      <div class="audit-icon">🔍</div>
+      <div>
+        <h1 class="audit-title">Audit Log</h1>
+        <p class="audit-sub">{{ filtered().length }} events · system-wide activity trail</p>
+      </div>
+    </div>
+    <div class="audit-toolbar">
+      <div class="view-toggle">
+        <button class="view-btn" [class.active]="view() === 'timeline'" (click)="view.set('timeline')" title="Timeline">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <circle cx="3" cy="4" r="1.5" fill="currentColor"/>
+            <circle cx="3" cy="8" r="1.5" fill="currentColor"/>
+            <circle cx="3" cy="12" r="1.5" fill="currentColor"/>
+            <path d="M3 5.5v1M3 9.5v1M6 4h8M6 8h8M6 12h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          Timeline
+        </button>
+        <button class="view-btn" [class.active]="view() === 'table'" (click)="view.set('table')" title="Table">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M2 6h12M2 10h12M6 2v12" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          Table
+        </button>
+      </div>
+      <button class="btn-refresh" (click)="refresh()" title="Refresh">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <path d="M13 8A5 5 0 113 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M13 4v4h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ── FILTER BAR ─────────────────────────────────────── -->
+  <div class="filter-bar">
+    <div class="search-box">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+        <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M11 11l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <input class="search-input" type="text" placeholder="Search entity IDs or details…"
+             [ngModel]="search()" (ngModelChange)="search.set($event)" />
+    </div>
+    <select class="filter-select" [ngModel]="filterEntity()" (ngModelChange)="filterEntity.set($event)">
+      <option value="">All Entities</option>
+      @for (e of allEntities; track e) {
+        <option [value]="e">{{ ENTITY_META[e]?.icon }} {{ ENTITY_META[e]?.label }}</option>
+      }
+    </select>
+    <select class="filter-select" [ngModel]="filterAction()" (ngModelChange)="filterAction.set($event)">
+      <option value="">All Actions</option>
+      @for (a of allActions; track a) {
+        <option [value]="a">{{ ACTION_META[a]?.icon }} {{ ACTION_META[a]?.label }}</option>
+      }
+    </select>
+    <select class="filter-select" [ngModel]="filterUser()" (ngModelChange)="filterUser.set($event)">
+      <option value="">All Users</option>
+      @for (s of staff(); track s.id) {
+        <option [value]="s.id">{{ s.firstName }} {{ s.lastName }}</option>
+      }
+    </select>
+    <input class="filter-date" type="date" [ngModel]="dateFrom()" (ngModelChange)="dateFrom.set($event)" title="From date" />
+    <input class="filter-date" type="date" [ngModel]="dateTo()" (ngModelChange)="dateTo.set($event)" title="To date" />
+    @if (hasFilters()) {
+      <button class="btn-clear" (click)="clearFilters()">Clear filters</button>
+    }
+  </div>
+
+  @if (loading()) {
+    <div class="audit-loading">
+      <div class="spinner"></div>
+      <span>Loading audit trail…</span>
+    </div>
+  } @else if (filtered().length === 0) {
+    <div class="audit-empty">
+      <div class="audit-empty-icon">📋</div>
+      <div class="audit-empty-msg">No audit log entries match your filters.</div>
+    </div>
+  } @else {
+
+    <!-- ── TIMELINE VIEW ───────────────────────────────── -->
+    @if (view() === 'timeline') {
+      <div class="timeline-wrap">
+        @for (day of groupedByDay(); track day.date) {
+          <div class="timeline-day">
+            <div class="timeline-day-label">
+              <span class="day-date">{{ day.date }}</span>
+              <span class="day-count">{{ day.entries.length }} events</span>
+            </div>
+            <div class="timeline-entries">
+              @for (entry of day.entries; track entry.id) {
+                <div class="timeline-entry" (click)="selectEntry(entry)"
+                     [class.selected]="selectedEntry()?.id === entry.id">
+                  <div class="tl-line-col">
+                    <div class="tl-dot" [style.background]="actionMeta(entry.action).color">
+                      <span class="tl-dot-icon">{{ actionMeta(entry.action).icon }}</span>
+                    </div>
+                    <div class="tl-line"></div>
+                  </div>
+                  <div class="tl-body">
+                    <div class="tl-top">
+                      <span class="tl-action-chip"
+                            [style.background]="actionMeta(entry.action).bg"
+                            [style.color]="actionMeta(entry.action).color">
+                        {{ actionMeta(entry.action).label }}
+                      </span>
+                      <span class="tl-entity">
+                        {{ entityMeta(entry.entityType).icon }} {{ entityMeta(entry.entityType).label }}
+                      </span>
+                      <span class="tl-entity-id">{{ entry.entityId }}</span>
+                      <span class="tl-time">{{ entry.timestamp | date:'HH:mm:ss' }}</span>
+                    </div>
+                    <div class="tl-user">
+                      <div class="tl-avatar" [style.background]="staffColor(entry.userId)">
+                        {{ staffInitials(entry.userId) }}
+                      </div>
+                      <span>{{ staffName(entry.userId) }}</span>
+                      @if (entry.ipAddress) {
+                        <span class="tl-ip">{{ entry.ipAddress }}</span>
+                      }
+                    </div>
+                    @if (entry.details && objectKeys(entry.details).length > 0) {
+                      <div class="tl-details">
+                        @for (key of objectKeys(entry.details).slice(0, 3); track key) {
+                          <span class="tl-detail-item">
+                            <span class="detail-key">{{ key }}:</span>
+                            <span class="detail-val">{{ formatVal(entry.details![key]) }}</span>
+                          </span>
+                        }
+                        @if (objectKeys(entry.details).length > 3) {
+                          <span class="tl-detail-more">+{{ objectKeys(entry.details).length - 3 }} more</span>
+                        }
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- ── TABLE VIEW ─────────────────────────────────── -->
+    @if (view() === 'table') {
+      <div class="table-wrap">
+        <div class="audit-table">
+          <div class="thead">
+            <div class="th">Time</div>
+            <div class="th">Action</div>
+            <div class="th">Entity</div>
+            <div class="th">Entity ID</div>
+            <div class="th">Performed By</div>
+            <div class="th">IP Address</div>
+            <div class="th th-c">Details</div>
+          </div>
+
+          @for (entry of filtered(); track entry.id) {
+            <div class="tbody-row" (click)="selectEntry(entry)"
+                 [class.selected]="selectedEntry()?.id === entry.id">
+              <div class="td td-time">
+                <div class="ts-date">{{ entry.timestamp | date:'MMM d, y' }}</div>
+                <div class="ts-time">{{ entry.timestamp | date:'HH:mm:ss' }}</div>
+              </div>
+              <div class="td">
+                <span class="action-chip"
+                      [style.background]="actionMeta(entry.action).bg"
+                      [style.color]="actionMeta(entry.action).color">
+                  {{ actionMeta(entry.action).icon }} {{ actionMeta(entry.action).label }}
+                </span>
+              </div>
+              <div class="td">
+                <span class="entity-chip">
+                  {{ entityMeta(entry.entityType).icon }} {{ entityMeta(entry.entityType).label }}
+                </span>
+              </div>
+              <div class="td entity-id">{{ entry.entityId }}</div>
+              <div class="td">
+                <div class="staff-cell">
+                  <div class="staff-avatar-sm" [style.background]="staffColor(entry.userId)">
+                    {{ staffInitials(entry.userId) }}
+                  </div>
+                  <span>{{ staffName(entry.userId) }}</span>
+                </div>
+              </div>
+              <div class="td ip-cell">{{ entry.ipAddress ?? '—' }}</div>
+              <div class="td td-c">
+                @if (entry.details && objectKeys(entry.details).length > 0) {
+                  <button class="det-btn" (click)="$event.stopPropagation(); selectEntry(entry)">
+                    {{ objectKeys(entry.details).length }} fields
+                  </button>
+                } @else {
+                  <span class="td-none">—</span>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+  }
+</div>
+
+<!-- ── DETAIL PANEL ───────────────────────────────────── -->
+@if (selectedEntry()) {
+  <div class="detail-backdrop" (click)="selectedEntry.set(null)">
+    <div class="detail-panel" (click)="$event.stopPropagation()">
+      <div class="detail-header">
+        <div>
+          <div class="detail-title">Event Detail</div>
+          <div class="detail-sub">{{ selectedEntry()!.timestamp | date:'MMM d, y · HH:mm:ss' }}</div>
+        </div>
+        <button class="detail-close" (click)="selectedEntry.set(null)">✕</button>
+      </div>
+      <div class="detail-body">
+        <div class="detail-row">
+          <span class="dr-key">Action</span>
+          <span class="action-chip"
+                [style.background]="actionMeta(selectedEntry()!.action).bg"
+                [style.color]="actionMeta(selectedEntry()!.action).color">
+            {{ actionMeta(selectedEntry()!.action).icon }} {{ actionMeta(selectedEntry()!.action).label }}
+          </span>
+        </div>
+        <div class="detail-row">
+          <span class="dr-key">Entity</span>
+          <span>{{ entityMeta(selectedEntry()!.entityType).icon }} {{ entityMeta(selectedEntry()!.entityType).label }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="dr-key">Entity ID</span>
+          <code class="dr-code">{{ selectedEntry()!.entityId }}</code>
+        </div>
+        <div class="detail-row">
+          <span class="dr-key">Log ID</span>
+          <code class="dr-code">{{ selectedEntry()!.id }}</code>
+        </div>
+        <div class="detail-row">
+          <span class="dr-key">Performed By</span>
+          <span>{{ staffName(selectedEntry()!.userId) }} ({{ selectedEntry()!.userId }})</span>
+        </div>
+        @if (selectedEntry()!.ipAddress) {
+          <div class="detail-row">
+            <span class="dr-key">IP Address</span>
+            <span>{{ selectedEntry()!.ipAddress }}</span>
+          </div>
+        }
+        @if (selectedEntry()!.details && objectKeys(selectedEntry()!.details!).length > 0) {
+          <div class="detail-section">
+            <div class="detail-section-label">Changed Fields</div>
+            <div class="detail-fields">
+              @for (key of objectKeys(selectedEntry()!.details!); track key) {
+                <div class="detail-field-row">
+                  <span class="df-key">{{ key }}</span>
+                  <span class="df-val">{{ formatVal(selectedEntry()!.details![key]) }}</span>
+                </div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+}
+
+<style>
+/* ── Layout ──────────────────────────────────────────── */
+.audit-page { display:flex; flex-direction:column; height:100%; background:var(--surface-ground,#F8F7F4); }
+
+/* Header */
+.audit-header { display:flex; align-items:center; justify-content:space-between;
+  padding:20px 24px 16px; background:#fff; border-bottom:1px solid #E5E7EB; gap:12px; flex-wrap:wrap; }
+.audit-title-block { display:flex; align-items:center; gap:12px; }
+.audit-icon { width:40px; height:40px; background:#F0F9FF; border-radius:10px;
+  display:flex; align-items:center; justify-content:center; font-size:18px; }
+.audit-title { font-size:1.25rem; font-weight:700; color:#111827; margin:0; }
+.audit-sub { font-size:.8rem; color:#6B7280; margin:0; }
+.audit-toolbar { display:flex; align-items:center; gap:8px; }
+
+/* View toggle */
+.view-toggle { display:flex; background:#F3F4F6; border-radius:8px; padding:3px; gap:2px; }
+.view-btn { display:flex; align-items:center; gap:5px; padding:5px 12px; border:none;
+  background:transparent; border-radius:6px; font-size:.78rem; font-weight:500;
+  color:#6B7280; cursor:pointer; transition:.15s; }
+.view-btn.active { background:#fff; color:#111827; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+.btn-refresh { width:34px; height:34px; border:1px solid #E5E7EB; border-radius:7px;
+  background:#fff; display:flex; align-items:center; justify-content:center;
+  cursor:pointer; color:#6B7280; transition:.15s; }
+.btn-refresh:hover { border-color:#7C3AED; color:#7C3AED; }
+
+/* Filter bar */
+.filter-bar { display:flex; align-items:center; gap:8px; padding:12px 24px;
+  background:#fff; border-bottom:1px solid #E5E7EB; flex-wrap:wrap; }
+.search-box { display:flex; align-items:center; gap:6px; background:#F9FAFB;
+  border:1px solid #E5E7EB; border-radius:7px; padding:0 10px; }
+.search-input { border:none; background:transparent; outline:none; font-size:.82rem;
+  color:#374151; width:200px; height:32px; }
+.filter-select { padding:0 8px; height:32px; border:1px solid #E5E7EB;
+  border-radius:7px; background:#F9FAFB; font-size:.78rem; color:#374151; cursor:pointer; }
+.filter-date { padding:0 8px; height:32px; border:1px solid #E5E7EB;
+  border-radius:7px; background:#F9FAFB; font-size:.78rem; color:#374151; }
+.btn-clear { padding:0 12px; height:32px; border:1px solid #FCA5A5;
+  border-radius:7px; background:#FEE2E2; color:#DC2626; font-size:.78rem;
+  font-weight:600; cursor:pointer; transition:.15s; white-space:nowrap; }
+.btn-clear:hover { background:#FECACA; }
+
+/* Loading / empty */
+.audit-loading { display:flex; align-items:center; justify-content:center; gap:10px;
+  padding:80px 0; color:#6B7280; }
+.audit-empty { display:flex; flex-direction:column; align-items:center; gap:10px;
+  padding:80px 0; color:#9CA3AF; }
+.audit-empty-icon { font-size:2.5rem; }
+.audit-empty-msg { font-size:.88rem; }
+.spinner { width:20px; height:20px; border:2px solid #E5E7EB; border-top-color:#0891B2;
+  border-radius:50%; animation:spin .7s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* ── Timeline ─────────────────────────────────────────── */
+.timeline-wrap { flex:1; overflow:auto; padding:20px 24px; display:flex; flex-direction:column; gap:20px; }
+.timeline-day-label { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.day-date { font-size:.85rem; font-weight:700; color:#374151; }
+.day-count { font-size:.72rem; color:#9CA3AF; background:#F3F4F6; padding:2px 8px; border-radius:10px; }
+.timeline-entries { display:flex; flex-direction:column; gap:0; }
+
+.timeline-entry { display:flex; gap:0; cursor:pointer; transition:.15s; border-radius:8px; }
+.timeline-entry:hover .tl-body { background:#FAFAFA; }
+.timeline-entry.selected .tl-body { background:#F0F9FF; }
+.tl-line-col { display:flex; flex-direction:column; align-items:center; width:36px; flex-shrink:0; }
+.tl-dot { width:24px; height:24px; border-radius:50%; display:flex; align-items:center;
+  justify-content:center; flex-shrink:0; margin-top:10px; }
+.tl-dot-icon { font-size:.6rem; }
+.tl-line { flex:1; width:2px; background:#E5E7EB; margin-top:2px; min-height:16px; }
+.timeline-entry:last-child .tl-line { display:none; }
+
+.tl-body { flex:1; padding:10px 12px 10px 8px; border-radius:8px; transition:.15s; margin-bottom:4px; }
+.tl-top { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:5px; }
+.tl-action-chip { font-size:.72rem; font-weight:700; padding:2px 7px; border-radius:4px; }
+.tl-entity { font-size:.78rem; color:#6B7280; }
+.tl-entity-id { font-size:.72rem; color:#9CA3AF; font-family:monospace;
+  background:#F3F4F6; padding:1px 5px; border-radius:3px; }
+.tl-time { font-size:.72rem; color:#9CA3AF; margin-left:auto; }
+.tl-user { display:flex; align-items:center; gap:6px; margin-bottom:4px; }
+.tl-avatar { width:18px; height:18px; border-radius:50%; font-size:.6rem; font-weight:700;
+  display:flex; align-items:center; justify-content:center; color:#fff; flex-shrink:0; }
+.tl-user > span { font-size:.78rem; color:#374151; font-weight:500; }
+.tl-ip { font-size:.7rem; color:#9CA3AF; font-family:monospace; }
+.tl-details { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+.tl-detail-item { display:flex; align-items:center; gap:3px; font-size:.72rem;
+  background:#F3F4F6; border-radius:4px; padding:1px 6px; }
+.detail-key { color:#6B7280; }
+.detail-val { color:#374151; font-weight:600; max-width:150px; overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap; }
+.tl-detail-more { font-size:.7rem; color:#9CA3AF; }
+
+/* ── Table view ──────────────────────────────────────── */
+.table-wrap { flex:1; overflow:auto; padding:16px 24px 24px; }
+.audit-table { background:#fff; border:1px solid #E5E7EB; border-radius:12px; overflow:hidden; }
+.thead { display:grid; grid-template-columns:140px 140px 130px 1fr 160px 120px 80px;
+  padding:0 14px; background:#F9FAFB; border-bottom:1px solid #E5E7EB; }
+.th { padding:10px 8px; font-size:.72rem; font-weight:600; color:#6B7280;
+  text-transform:uppercase; letter-spacing:.04em; }
+.th-c { text-align:center; }
+.tbody-row { display:grid; grid-template-columns:140px 140px 130px 1fr 160px 120px 80px;
+  padding:0 14px; border-bottom:1px solid #F3F4F6; align-items:center;
+  cursor:pointer; transition:.1s; }
+.tbody-row:hover { background:#FAFAFA; }
+.tbody-row.selected { background:#F0F9FF; }
+.tbody-row:last-child { border-bottom:none; }
+.td { padding:10px 8px; font-size:.82rem; color:#374151; overflow:hidden; }
+.td-time { display:flex; flex-direction:column; gap:1px; }
+.ts-date { font-size:.8rem; font-weight:600; color:#111827; }
+.ts-time { font-size:.7rem; color:#9CA3AF; font-family:monospace; }
+.td-c { text-align:center; }
+.action-chip { display:inline-flex; align-items:center; gap:3px; padding:2px 8px;
+  border-radius:5px; font-size:.72rem; font-weight:700; }
+.entity-chip { display:inline-flex; align-items:center; gap:3px; font-size:.78rem; color:#374151; }
+.entity-id { font-family:monospace; font-size:.72rem; color:#6B7280; }
+.staff-cell { display:flex; align-items:center; gap:6px; }
+.staff-avatar-sm { width:22px; height:22px; border-radius:50%; font-size:.6rem; font-weight:700;
+  display:flex; align-items:center; justify-content:center; color:#fff; flex-shrink:0; }
+.ip-cell { font-family:monospace; font-size:.72rem; color:#9CA3AF; }
+.det-btn { padding:2px 9px; border:1px solid #E5E7EB; border-radius:5px;
+  background:#F9FAFB; font-size:.72rem; cursor:pointer; color:#374151; transition:.15s; }
+.det-btn:hover { border-color:#0891B2; color:#0891B2; }
+.td-none { color:#D1D5DB; }
+
+/* ── Detail panel ────────────────────────────────────── */
+.detail-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:1000;
+  display:flex; justify-content:flex-end; }
+.detail-panel { background:#fff; width:400px; max-width:100%; height:100%;
+  display:flex; flex-direction:column; box-shadow:-6px 0 32px rgba(0,0,0,.12); }
+.detail-header { display:flex; align-items:flex-start; justify-content:space-between;
+  padding:18px 18px 14px; border-bottom:1px solid #F3F4F6; }
+.detail-title { font-size:.95rem; font-weight:700; color:#111827; }
+.detail-sub { font-size:.75rem; color:#9CA3AF; margin-top:2px; }
+.detail-close { width:30px; height:30px; border:1px solid #E5E7EB; border-radius:6px;
+  background:#F9FAFB; cursor:pointer; color:#6B7280; }
+.detail-body { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:0; }
+.detail-row { display:flex; align-items:center; justify-content:space-between;
+  padding:10px 0; border-bottom:1px solid #F9FAFB; font-size:.83rem; }
+.dr-key { color:#6B7280; font-weight:600; font-size:.78rem; text-transform:uppercase; letter-spacing:.04em; }
+.dr-code { font-family:monospace; font-size:.75rem; background:#F3F4F6; padding:2px 6px;
+  border-radius:4px; color:#374151; max-width:200px; overflow:hidden; text-overflow:ellipsis; }
+.detail-section { margin-top:14px; }
+.detail-section-label { font-size:.72rem; font-weight:700; text-transform:uppercase;
+  letter-spacing:.08em; color:#9CA3AF; margin-bottom:8px; }
+.detail-fields { border:1px solid #E5E7EB; border-radius:8px; overflow:hidden; }
+.detail-field-row { display:flex; padding:8px 12px; border-bottom:1px solid #F3F4F6;
+  font-size:.8rem; gap:12px; }
+.detail-field-row:last-child { border-bottom:none; }
+.df-key { color:#6B7280; font-family:monospace; min-width:100px; flex-shrink:0; }
+.df-val { color:#111827; font-weight:500; word-break:break-all; }
+</style>

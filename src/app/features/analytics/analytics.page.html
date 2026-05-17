@@ -1,0 +1,252 @@
+<div class="an-page">
+  <!-- ── HEADER ─────────────────────────────────────────────── -->
+  <header class="an-header">
+    <div class="an-title-block">
+      <div class="an-icon">📊</div>
+      <div>
+        <h1 class="an-title">Analytics</h1>
+        <p class="an-sub">{{ propertyCtx.active()?.name }} · Revenue intelligence</p>
+      </div>
+    </div>
+    <div class="an-toolbar">
+      <div class="preset-group">
+        @for (p of presets; track p.id) {
+          <button class="preset-btn" [class.active]="activePreset() === p.id" (click)="applyPreset(p.id)">{{ p.label }}</button>
+        }
+      </div>
+      @if (activePreset() === 'custom') {
+        <div class="custom-range">
+          <input type="date" class="date-input" [ngModel]="customFrom()" (ngModelChange)="customFrom.set($event); applyCustom()" />
+          <span class="date-sep">→</span>
+          <input type="date" class="date-input" [ngModel]="customTo()" (ngModelChange)="customTo.set($event); applyCustom()" />
+        </div>
+      }
+      <div class="export-group">
+        <button class="btn-export" (click)="exportCsv()">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          CSV
+        </button>
+        <button class="btn-export btn-pdf" (click)="exportPdf()">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="9" height="11" rx="1" stroke="currentColor" stroke-width="1.5"/><path d="M5 4h5M5 7h5M5 10h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M11 6l3 3-3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          PDF
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── DATE RANGE LABEL ─────────────────────────────────────── -->
+  <div class="range-banner">
+    <span class="range-label">{{ range().from | date:'MMM d, y' }} – {{ range().to | date:'MMM d, y' }}</span>
+    <span class="range-days">{{ dayCount() }} day{{ dayCount() === 1 ? '' : 's' }}</span>
+  </div>
+
+  @if (loading()) {
+    <div class="skeleton-wrap">
+      <div class="skel-kpi-row">@for (_ of [1,2,3,4]; track $index) { <div class="skel skel-kpi"></div> }</div>
+      <div class="skel-chart-row"><div class="skel skel-chart-lg"></div><div class="skel skel-chart-sm"></div></div>
+      <div class="skel-chart-row"><div class="skel skel-chart-sm"></div><div class="skel skel-chart-lg"></div></div>
+    </div>
+  } @else {
+
+  <!-- ── KPI CARDS ──────────────────────────────────────────── -->
+  <div class="kpi-grid">
+    <div class="kpi-card kpi-primary">
+      <div class="kpi-top">
+        <span class="kpi-icon">🏨</span>
+        <span class="kpi-delta" [class.positive]="kpis().occDelta >= 0" [class.negative]="kpis().occDelta < 0">
+          {{ kpis().occDelta >= 0 ? '↑' : '↓' }} {{ (kpis().occDelta < 0 ? -kpis().occDelta : kpis().occDelta) | number:'1.1-1' }}pp
+        </span>
+      </div>
+      <div class="kpi-value">{{ kpis().occupancy | percent:'1.1-1' }}</div>
+      <div class="kpi-label">Occupancy Rate</div>
+      <div class="kpi-sub">{{ kpis().occupiedRoomNights | number }} occ. room-nights</div>
+    </div>
+    <div class="kpi-card kpi-gold">
+      <div class="kpi-top">
+        <span class="kpi-icon">💰</span>
+        <span class="kpi-delta kpi-delta-dark" [class.positive]="kpis().adrDelta >= 0" [class.negative]="kpis().adrDelta < 0">
+          {{ kpis().adrDelta >= 0 ? '↑' : '↓' }} {{ (kpis().adrDelta < 0 ? -kpis().adrDelta : kpis().adrDelta) | number:'1.0-0' }}
+        </span>
+      </div>
+      <div class="kpi-value">{{ propertyCtx.active()?.currency ?? '$' }} {{ kpis().adr | number:'1.0-0' }}</div>
+      <div class="kpi-label">ADR</div>
+      <div class="kpi-sub">Average daily rate per room</div>
+    </div>
+    <div class="kpi-card kpi-teal">
+      <div class="kpi-top">
+        <span class="kpi-icon">📈</span>
+        <span class="kpi-delta" [class.positive]="kpis().revparDelta >= 0" [class.negative]="kpis().revparDelta < 0">
+          {{ kpis().revparDelta >= 0 ? '↑' : '↓' }} {{ (kpis().revparDelta < 0 ? -kpis().revparDelta : kpis().revparDelta) | number:'1.0-0' }}
+        </span>
+      </div>
+      <div class="kpi-value">{{ propertyCtx.active()?.currency ?? '$' }} {{ kpis().revpar | number:'1.0-0' }}</div>
+      <div class="kpi-label">RevPAR</div>
+      <div class="kpi-sub">Revenue per available room</div>
+    </div>
+    <div class="kpi-card kpi-dark">
+      <div class="kpi-top">
+        <span class="kpi-icon">🏦</span>
+        <span class="kpi-delta" [class.positive]="kpis().revDelta >= 0" [class.negative]="kpis().revDelta < 0">
+          {{ kpis().revDelta >= 0 ? '↑' : '↓' }} {{ (kpis().revDelta < 0 ? -kpis().revDelta : kpis().revDelta) | number:'1.0-0' }}
+        </span>
+      </div>
+      <div class="kpi-value">{{ propertyCtx.active()?.currency ?? '$' }} {{ kpis().totalRevenue | number:'1.0-0' }}</div>
+      <div class="kpi-label">Total Revenue</div>
+      <div class="kpi-sub">Rooms + F&amp;B + Spa</div>
+    </div>
+  </div>
+
+  <!-- ── REVENUE BREAKDOWN STRIP ───────────────────────────── -->
+  <div class="rev-strip">
+    <div class="rev-segment">
+      <span class="rev-dot" style="background:#1A3A5C"></span>
+      <span class="rev-label">Room</span>
+      <span class="rev-val">{{ propertyCtx.active()?.currency ?? '$' }} {{ kpis().roomRevenue | number:'1.0-0' }}</span>
+      <span class="rev-pct">{{ kpis().roomRevenue / kpis().totalRevenue | percent:'1.0-0' }}</span>
+    </div>
+    <div class="rev-seg-divider"></div>
+    <div class="rev-segment">
+      <span class="rev-dot" style="background:#C9A961"></span>
+      <span class="rev-label">F&amp;B</span>
+      <span class="rev-val">{{ propertyCtx.active()?.currency ?? '$' }} {{ kpis().fnbRevenue | number:'1.0-0' }}</span>
+      <span class="rev-pct">{{ kpis().fnbRevenue / kpis().totalRevenue | percent:'1.0-0' }}</span>
+    </div>
+    <div class="rev-seg-divider"></div>
+    <div class="rev-segment">
+      <span class="rev-dot" style="background:#4A7C59"></span>
+      <span class="rev-label">Spa</span>
+      <span class="rev-val">{{ propertyCtx.active()?.currency ?? '$' }} {{ kpis().spaRevenue | number:'1.0-0' }}</span>
+      <span class="rev-pct">{{ kpis().spaRevenue / kpis().totalRevenue | percent:'1.0-0' }}</span>
+    </div>
+    <div class="rev-seg-divider"></div>
+    <div class="rev-segment">
+      <span class="rev-label">Arrivals</span>
+      <span class="rev-val rev-count">{{ kpis().totalArrivals }}</span>
+    </div>
+    <div class="rev-seg-divider"></div>
+    <div class="rev-segment">
+      <span class="rev-label">No-shows</span>
+      <span class="rev-val rev-count rev-danger">{{ kpis().totalNoShows }}</span>
+    </div>
+    <div class="rev-seg-divider"></div>
+    <div class="rev-segment">
+      <span class="rev-label">Cancellations</span>
+      <span class="rev-val rev-count rev-danger">{{ kpis().totalCancellations }}</span>
+    </div>
+  </div>
+
+  <!-- ── CHARTS GRID ────────────────────────────────────────── -->
+  <div class="charts-grid">
+
+    <!-- Revenue Trend line chart -->
+    <div class="chart-card chart-wide">
+      <div class="chart-head">
+        <div>
+          <div class="chart-title">Revenue Trend</div>
+          <div class="chart-sub">Daily room, F&amp;B and spa revenue</div>
+        </div>
+      </div>
+      <div #revTrendEl class="chart-body"></div>
+    </div>
+
+    <!-- Booking Source donut -->
+    <div class="chart-card">
+      <div class="chart-head">
+        <div>
+          <div class="chart-title">Booking Source Mix</div>
+          <div class="chart-sub">Reservations by channel</div>
+        </div>
+      </div>
+      <div #sourceEl class="chart-body chart-body-sm"></div>
+    </div>
+
+    <!-- Occupancy heatmap calendar -->
+    <div class="chart-card chart-wide">
+      <div class="chart-head">
+        <div>
+          <div class="chart-title">Occupancy Heatmap</div>
+          <div class="chart-sub">Colour-coded by nightly occupancy %</div>
+        </div>
+        <div class="heatmap-legend">
+          <span class="legend-item"><span class="legend-swatch" style="background:#EEF2F7"></span>0–40%</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#A8C4E0"></span>40–60%</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#5B7FA8"></span>60–80%</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#1A3A5C"></span>80–100%</span>
+        </div>
+      </div>
+      <div class="heatmap-days">
+        @for (d of ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']; track d) { <span>{{ d }}</span> }
+      </div>
+      <div class="heatmap-grid">
+        @for (week of heatmapWeeks(); track $index) {
+          <div class="heatmap-week">
+            @for (cell of week; track cell.date) {
+              <div class="heatmap-cell" [style.background]="cell.inRange ? occColor(cell.occ) : '#F5F5F5'"
+                   [style.opacity]="cell.inRange ? 1 : 0.35"
+                   [title]="cell.date + ': ' + (cell.occ * 100 | number:'1.0-0') + '% occ · $' + (cell.adr | number:'1.0-0') + ' ADR'">
+                <span class="cell-day" [style.color]="cell.occ >= 0.6 ? 'white' : '#374151'">{{ cell.dayNum }}</span>
+                @if (cell.inRange && cell.occ > 0) {
+                  <span class="cell-pct" [style.color]="cell.occ >= 0.6 ? 'rgba(255,255,255,.8)' : '#6B7280'">
+                    {{ cell.occ * 100 | number:'1.0-0' }}%
+                  </span>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Room-type bar chart -->
+    <div class="chart-card">
+      <div class="chart-head">
+        <div>
+          <div class="chart-title">Room-Type Performance</div>
+          <div class="chart-sub">Revenue &amp; ADR by category</div>
+        </div>
+      </div>
+      <div #roomTypeEl class="chart-body chart-body-sm"></div>
+    </div>
+
+  </div>
+
+  <!-- ── ROOM TYPE TABLE ─────────────────────────────────────── -->
+  <div class="perf-table-card">
+    <div class="chart-title" style="margin-bottom:var(--space-4)">Room-Type Detail</div>
+    <table class="perf-table">
+      <thead>
+        <tr>
+          <th>Room Type</th>
+          <th class="ta-r">Reservations</th>
+          <th class="ta-r">Revenue</th>
+          <th class="ta-r">ADR</th>
+          <th class="ta-r">Occ %</th>
+          <th>Rev Share</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (rt of roomTypePerf(); track rt.name) {
+          <tr>
+            <td class="rt-name">{{ rt.name }}</td>
+            <td class="ta-r">{{ rt.reservations }}</td>
+            <td class="ta-r mono">{{ propertyCtx.active()?.currency ?? '$' }} {{ rt.revenue | number:'1.0-0' }}</td>
+            <td class="ta-r mono">{{ propertyCtx.active()?.currency ?? '$' }} {{ rt.adr | number:'1.0-0' }}</td>
+            <td class="ta-r">
+              <span class="occ-badge" [style.background]="occColor(rt.occupancy / 100)" [style.color]="rt.occupancy >= 60 ? 'white' : '#1A3A5C'">
+                {{ rt.occupancy | number:'1.0-0' }}%
+              </span>
+            </td>
+            <td>
+              <div class="rev-bar-wrap">
+                <div class="rev-bar-fill" [style.width.%]="rt.revenue / kpis().totalRevenue * 100"></div>
+                <span class="rev-bar-pct">{{ rt.revenue / kpis().totalRevenue | percent:'1.0-0' }}</span>
+              </div>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  } <!-- /if !loading -->
+</div>

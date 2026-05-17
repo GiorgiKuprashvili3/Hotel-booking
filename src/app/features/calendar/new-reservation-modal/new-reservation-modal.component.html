@@ -1,0 +1,304 @@
+<!-- Backdrop -->
+<div class="modal-backdrop" (click)="cancel.emit()"></div>
+
+<!-- Modal -->
+<div class="modal-wrap" role="dialog" aria-modal="true" aria-label="New reservation" [@fadeScale]>
+
+  <!-- Header -->
+  <div class="modal-header">
+    <div class="modal-header__left">
+      <div class="modal-icon">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <rect x="2" y="3" width="14" height="13" rx="2" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M6 1v4M12 1v4M2 8h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M6 12h6M9 10v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div>
+        <h2 class="modal-title">New Reservation</h2>
+        <p class="modal-sub">{{ room()?.number }} · {{ roomType()?.name }}</p>
+      </div>
+    </div>
+    <button class="btn-close" (click)="cancel.emit()" aria-label="Close">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Dates strip (read-only, from drag) -->
+  <div class="dates-strip">
+    <div class="date-block">
+      <span class="date-lbl">Check-in</span>
+      <span class="date-val">{{ checkIn() | date:'EEE, MMM d, y' }}</span>
+    </div>
+    <div class="date-sep">
+      <svg width="20" height="8" viewBox="0 0 20 8" fill="none">
+        <path d="M0 4h18M14 1l3 3-3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="nights-pill">{{ nights() }}n</span>
+    </div>
+    <div class="date-block date-block--right">
+      <span class="date-lbl">Check-out</span>
+      <span class="date-val">{{ checkOut() | date:'EEE, MMM d, y' }}</span>
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div class="modal-body">
+
+    <!-- Step 1: Guest search -->
+    <section class="form-section">
+      <h3 class="form-section__title">
+        <span class="step-num">1</span>Guest
+      </h3>
+
+      @if (!selectedGuest()) {
+        @if (!showCreateForm()) {
+          <div class="search-wrap">
+            <div class="search-input-wrap">
+              <svg class="search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M9.5 9.5l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+              <input
+                class="search-input"
+                type="text"
+                placeholder="Search by name, email or phone…"
+                [ngModel]="searchQuery()"
+                (ngModelChange)="onSearchChange($event)"
+                (focus)="showResults.set(true)"
+                autocomplete="off" />
+              @if (searchLoading()) {
+                <div class="search-spinner"></div>
+              }
+              <button
+                type="button"
+                class="btn-new-guest"
+                (click)="openCreateForm()"
+                title="Add a new guest">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                  <path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                </svg>
+                <span>New</span>
+              </button>
+            </div>
+
+            @if (showResults() && searchResults().length > 0) {
+              <div class="search-results">
+                @for (g of searchResults(); track g.id) {
+                  <button class="search-result" (click)="selectGuest(g)">
+                    <div class="result-avatar">{{ initials(g) }}</div>
+                    <div class="result-info">
+                      <span class="result-name">{{ g.firstName }} {{ g.lastName }}</span>
+                      <span class="result-meta">{{ g.email }} · {{ g.phone }}</span>
+                    </div>
+                    @if (g.loyaltyTier) {
+                      <span class="result-tier result-tier--{{ g.loyaltyTier }}">
+                        {{ g.loyaltyTier | titlecase }}
+                      </span>
+                    }
+                  </button>
+                }
+              </div>
+            }
+
+            @if (showResults() && searchQuery().length > 1 && !searchLoading() && searchResults().length === 0) {
+              <div class="search-empty-wrap">
+                <p class="search-empty-text">No guests found for "{{ searchQuery() }}"</p>
+                <button class="btn-create-from-empty" (click)="openCreateForm()">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                  </svg>
+                  Add "{{ searchQuery() }}" as new guest
+                </button>
+              </div>
+            }
+          </div>
+        } @else {
+          <!-- Inline create-guest form -->
+          <div class="create-guest">
+            <div class="create-guest__header">
+              <span class="create-guest__title">New guest details</span>
+              <button class="btn-back" type="button" (click)="cancelCreateForm()">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M7.5 2.5L3 6l4.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Back to search
+              </button>
+            </div>
+            <div class="create-grid">
+              <label class="field">
+                <span class="field-lbl">First name <span class="req">*</span></span>
+                <input
+                  class="field-input"
+                  type="text"
+                  [ngModel]="newFirstName()"
+                  (ngModelChange)="newFirstName.set($event)"
+                  placeholder="Jane"
+                  autocomplete="off" />
+              </label>
+              <label class="field">
+                <span class="field-lbl">Last name <span class="req">*</span></span>
+                <input
+                  class="field-input"
+                  type="text"
+                  [ngModel]="newLastName()"
+                  (ngModelChange)="newLastName.set($event)"
+                  placeholder="Doe"
+                  autocomplete="off" />
+              </label>
+              <label class="field field--full">
+                <span class="field-lbl">Email <span class="req">*</span></span>
+                <input
+                  class="field-input"
+                  type="email"
+                  [ngModel]="newEmail()"
+                  (ngModelChange)="newEmail.set($event)"
+                  placeholder="jane@example.com"
+                  autocomplete="off" />
+              </label>
+              <label class="field field--full">
+                <span class="field-lbl">Phone <span class="req">*</span></span>
+                <input
+                  class="field-input"
+                  type="tel"
+                  [ngModel]="newPhone()"
+                  (ngModelChange)="newPhone.set($event)"
+                  placeholder="+1 555 0100"
+                  autocomplete="off" />
+              </label>
+            </div>
+            @if (createError()) {
+              <div class="create-error">{{ createError() }}</div>
+            }
+            <div class="create-actions">
+              <button class="btn-create-cancel" type="button" (click)="cancelCreateForm()">Cancel</button>
+              <button
+                class="btn-create-save"
+                type="button"
+                [disabled]="!canCreateGuest() || creating()"
+                (click)="submitNewGuest()">
+                @if (creating()) {
+                  <span class="search-spinner search-spinner--on-primary"></span>
+                  Saving…
+                } @else {
+                  Save & select
+                }
+              </button>
+            </div>
+          </div>
+        }
+      } @else {
+        <div class="guest-selected">
+          <div class="guest-avatar">{{ initials(selectedGuest()!) }}</div>
+          <div class="guest-info">
+            <span class="guest-name">{{ selectedGuest()!.firstName }} {{ selectedGuest()!.lastName }}</span>
+            <span class="guest-meta">{{ selectedGuest()!.email }} · {{ selectedGuest()!.phone }}</span>
+          </div>
+          @if (selectedGuest()!.loyaltyTier) {
+            <span class="result-tier result-tier--{{ selectedGuest()!.loyaltyTier }}">
+              {{ selectedGuest()!.loyaltyTier | titlecase }}
+            </span>
+          }
+          <button class="btn-change" (click)="clearGuest()">Change</button>
+        </div>
+      }
+    </section>
+
+    <!-- Step 2: Occupancy -->
+    <section class="form-section">
+      <h3 class="form-section__title">
+        <span class="step-num">2</span>Occupancy
+      </h3>
+      <div class="occ-row">
+        <div class="counter-group">
+          <span class="counter-label">Adults</span>
+          <div class="counter">
+            <button class="counter-btn" (click)="adults.set(Math.max(1, adults() - 1))">−</button>
+            <span class="counter-val">{{ adults() }}</span>
+            <button class="counter-btn" (click)="adults.set(Math.min(maxOcc(), adults() + 1))">+</button>
+          </div>
+        </div>
+        <div class="counter-group">
+          <span class="counter-label">Children</span>
+          <div class="counter">
+            <button class="counter-btn" (click)="children.set(Math.max(0, children() - 1))">−</button>
+            <span class="counter-val">{{ children() }}</span>
+            <button class="counter-btn" (click)="children.set(Math.min(maxOcc() - adults(), children() + 1))">+</button>
+          </div>
+        </div>
+        <span class="occ-cap">Max {{ maxOcc() }} guests</span>
+      </div>
+    </section>
+
+    <!-- Step 3: Rate plan -->
+    <section class="form-section">
+      <h3 class="form-section__title">
+        <span class="step-num">3</span>Rate Plan
+      </h3>
+      <div class="rate-plans">
+        @for (rp of ratePlans(); track rp.id) {
+          <button
+            class="rate-card"
+            [class.active]="selectedRatePlanId() === rp.id"
+            (click)="selectedRatePlanId.set(rp.id)">
+            <div class="rate-card__top">
+              <span class="rate-name">{{ rp.name }}</span>
+              <span class="rate-price">{{ nightlyRate(rp) | currency }}<span class="rate-per">/night</span></span>
+            </div>
+            <div class="rate-card__tags">
+              @if (rp.refundable) {
+                <span class="rate-tag rate-tag--green">Refundable</span>
+              } @else {
+                <span class="rate-tag rate-tag--red">Non-refundable</span>
+              }
+              @if (rp.includesBreakfast) {
+                <span class="rate-tag rate-tag--blue">Breakfast incl.</span>
+              }
+            </div>
+          </button>
+        }
+      </div>
+    </section>
+
+    <!-- Step 4: Special requests -->
+    <section class="form-section form-section--last">
+      <h3 class="form-section__title">
+        <span class="step-num">4</span>Special Requests
+        <span class="optional">optional</span>
+      </h3>
+      <textarea
+        class="textarea"
+        rows="2"
+        placeholder="Early check-in, allergy info, bed preference…"
+        [ngModel]="specialRequests()"
+        (ngModelChange)="specialRequests.set($event)">
+      </textarea>
+    </section>
+
+  </div><!-- /modal-body -->
+
+  <!-- Footer -->
+  <div class="modal-footer">
+    <div class="price-summary">
+      @if (selectedPlan()) {
+        <div class="price-breakdown">
+          <span class="price-label">{{ nights() }}n × {{ nightlyRate(selectedPlan()!) | currency }}</span>
+          <span class="price-tax">+ tax (12%)</span>
+        </div>
+        <span class="price-total">{{ totalAmount() | currency }}</span>
+      }
+    </div>
+    <div class="footer-actions">
+      <button class="btn-cancel" (click)="cancel.emit()">Cancel</button>
+      <button
+        class="btn-confirm"
+        [disabled]="!canConfirm()"
+        (click)="onConfirm()">
+        Create Reservation
+      </button>
+    </div>
+  </div>
+
+</div>

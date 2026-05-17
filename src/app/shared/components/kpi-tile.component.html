@@ -1,0 +1,24 @@
+<div class="tile" [class.loading]="loading">
+  <div class="tile-header">
+    <span class="tile-label">{{ label }}</span>
+    <div class="tile-icon">
+      <mat-icon>{{ icon }}</mat-icon>
+    </div>
+  </div>
+
+  <div class="tile-value">
+    @if (prefix) { <span class="value-prefix">{{ prefix }}</span> }
+    <span class="value-main">{{ loading ? '—' : value }}</span>
+    @if (suffix && !loading) { <span class="value-suffix">{{ suffix }}</span> }
+  </div>
+
+  @if (delta !== undefined && !loading) {
+    <div class="tile-delta" [class.positive]="delta > 0" [class.negative]="delta < 0">
+      <mat-icon class="delta-icon">
+        {{ delta > 0 ? 'arrow_upward' : delta < 0 ? 'arrow_downward' : 'remove' }}
+      </mat-icon>
+      <span>{{ delta | number:'1.1-1' }}%</span>
+      @if (deltaLabel) { <span class="delta-label">{{ deltaLabel }}</span> }
+    </div>
+  }
+</div>

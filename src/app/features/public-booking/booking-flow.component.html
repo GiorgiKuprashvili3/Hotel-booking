@@ -1,0 +1,477 @@
+<div class="booking-page">
+  <!-- ── STEP INDICATOR ── -->
+  <nav class="stepper" aria-label="Booking progress">
+    <ol>
+      @for (s of stepsList; track s) {
+        <li [class.is-active]="s === step()"
+            [class.is-done]="isDone(s)"
+            [attr.aria-current]="s === step() ? 'step' : null">
+          <span class="step-circle">
+            @if (isDone(s)) {
+              <mat-icon aria-hidden="true">check</mat-icon>
+            } @else {
+              {{ stepLabels[s].num }}
+            }
+          </span>
+          <span class="step-label">{{ stepLabels[s].label }}</span>
+        </li>
+      }
+    </ol>
+  </nav>
+
+  <div class="booking-layout" [class.full-width]="step() === 'confirmation'">
+    <!-- ── MAIN PANE ── -->
+    <section class="booking-main" aria-live="polite">
+
+      <!-- STEP 1: DATES & GUESTS -->
+      @if (step() === 'dates') {
+        <header class="step-header">
+          <h2>When are you visiting?</h2>
+          <p>Tell us your dates so we can show you what's available.</p>
+        </header>
+
+        <form class="step-form" (ngSubmit)="goNext()" novalidate>
+          <div class="form-row two">
+            <div class="form-field">
+              <label for="checkIn">Check in</label>
+              <input id="checkIn"
+                     type="date"
+                     [min]="todayIso"
+                     [(ngModel)]="checkIn"
+                     name="checkIn"
+                     required
+                     [attr.aria-invalid]="dateError() ? 'true' : null" />
+            </div>
+            <div class="form-field">
+              <label for="checkOut">Check out</label>
+              <input id="checkOut"
+                     type="date"
+                     [min]="minCheckoutIso()"
+                     [(ngModel)]="checkOut"
+                     name="checkOut"
+                     required
+                     [attr.aria-invalid]="dateError() ? 'true' : null" />
+            </div>
+          </div>
+
+          <div class="form-row two">
+            <div class="form-field">
+              <label for="adults">Adults</label>
+              <select id="adults" [(ngModel)]="adults" name="adults">
+                @for (n of [1,2,3,4]; track n) {
+                  <option [ngValue]="n">{{ n }} adult{{ n > 1 ? 's' : '' }}</option>
+                }
+              </select>
+            </div>
+            <div class="form-field">
+              <label for="children">Children</label>
+              <select id="children" [(ngModel)]="children" name="children">
+                @for (n of [0,1,2,3]; track n) {
+                  <option [ngValue]="n">{{ n }} {{ n === 1 ? 'child' : 'children' }}</option>
+                }
+              </select>
+            </div>
+          </div>
+
+          @if (dateError()) {
+            <div class="field-error" role="alert">
+              <mat-icon>error_outline</mat-icon>
+              {{ dateError() }}
+            </div>
+          }
+
+          @if (!dateError() && nights() > 0) {
+            <div class="step-stay-summary">
+              <mat-icon>info</mat-icon>
+              <span>{{ nights() }} night{{ nights() > 1 ? 's' : '' }} ·
+                {{ totalGuests() }} guest{{ totalGuests() > 1 ? 's' : '' }}</span>
+            </div>
+          }
+
+          <div class="step-actions">
+            <a routerLink="/book" class="back-btn">
+              <mat-icon>arrow_back</mat-icon> Back to hotel
+            </a>
+            <button mat-flat-button color="primary" type="submit"
+                    [disabled]="!!dateError()">
+              Continue
+              <mat-icon>arrow_forward</mat-icon>
+            </button>
+          </div>
+        </form>
+      }
+
+      <!-- STEP 2: ROOM SELECTION -->
+      @if (step() === 'room') {
+        <header class="step-header">
+          <h2>Choose your room</h2>
+          <p>All rates include taxes. Free cancellation up to 24 hours before arrival.</p>
+        </header>
+
+        @if (loadingRooms()) {
+          <div class="room-list">
+            @for (i of [1,2,3]; track i) {
+              <div class="room-option is-loading">
+                <lux-skeleton width="200px" height="140px" radius="var(--radius-md)" />
+                <div class="room-info">
+                  <lux-skeleton width="50%" height="20px" />
+                  <lux-skeleton width="80%" height="14px" />
+                  <lux-skeleton width="60%" height="14px" />
+                </div>
+              </div>
+            }
+          </div>
+        } @else if (availableRooms().length === 0) {
+          <lux-empty-state
+            icon="hotel"
+            title="No rooms available for these dates"
+            message="Try different dates, or call our reservations team for assistance.">
+            <button mat-stroked-button (click)="goBack()">Change dates</button>
+          </lux-empty-state>
+        } @else {
+          <fieldset class="room-list" [attr.aria-label]="'Choose from ' + availableRooms().length + ' room types'">
+            <legend class="sr-only">Available room types</legend>
+            @for (rt of availableRooms(); track rt.id) {
+              <label class="room-option"
+                     [class.is-selected]="selectedRoomTypeId() === rt.id">
+                <input type="radio"
+                       name="roomType"
+                       [value]="rt.id"
+                       [checked]="selectedRoomTypeId() === rt.id"
+                       (change)="selectedRoomTypeId.set(rt.id)" />
+                <img [src]="imageFor(rt)" [alt]="rt.name + ' room photograph'" loading="lazy" />
+                <div class="room-info">
+                  <div class="room-info-top">
+                    <h3>{{ rt.name }}</h3>
+                    <div class="room-price">
+                      <span class="price">₾{{ rt.basePrice }}</span>
+                      <span class="price-meta">/ night</span>
+                    </div>
+                  </div>
+                  <div class="room-meta">
+                    <span><mat-icon aria-hidden="true">bed</mat-icon> {{ rt.bedConfiguration }}</span>
+                    <span><mat-icon aria-hidden="true">straighten</mat-icon> {{ rt.sizeSqm }} m²</span>
+                    <span><mat-icon aria-hidden="true">people</mat-icon> Sleeps {{ rt.maxOccupancy }}</span>
+                  </div>
+                  <p class="room-desc">{{ rt.description }}</p>
+                  @if (nights() > 0) {
+                    <div class="room-total">
+                      ₾{{ rt.basePrice * nights() | number:'1.0-0' }} for {{ nights() }} nights, incl. tax
+                    </div>
+                  }
+                </div>
+                <div class="room-check" aria-hidden="true">
+                  <mat-icon>check_circle</mat-icon>
+                </div>
+              </label>
+            }
+          </fieldset>
+        }
+
+        <div class="step-actions">
+          <button mat-stroked-button (click)="goBack()">
+            <mat-icon>arrow_back</mat-icon> Back
+          </button>
+          <button mat-flat-button color="primary"
+                  (click)="goNext()"
+                  [disabled]="!selectedRoomTypeId()">
+            Continue
+            <mat-icon>arrow_forward</mat-icon>
+          </button>
+        </div>
+      }
+
+      <!-- STEP 3: GUEST DETAILS -->
+      @if (step() === 'guest') {
+        <header class="step-header">
+          <h2>Your details</h2>
+          <p>We'll send your confirmation to this email.</p>
+        </header>
+
+        <form class="step-form" (ngSubmit)="goNext()" novalidate>
+          <div class="form-row two">
+            <div class="form-field">
+              <label for="firstName">First name <span class="req">*</span></label>
+              <input id="firstName" type="text" autocomplete="given-name"
+                     [(ngModel)]="firstName" name="firstName" required
+                     [attr.aria-invalid]="touched() && !firstName ? 'true' : null" />
+            </div>
+            <div class="form-field">
+              <label for="lastName">Last name <span class="req">*</span></label>
+              <input id="lastName" type="text" autocomplete="family-name"
+                     [(ngModel)]="lastName" name="lastName" required
+                     [attr.aria-invalid]="touched() && !lastName ? 'true' : null" />
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label for="email">Email <span class="req">*</span></label>
+            <input id="email" type="email" autocomplete="email"
+                   [(ngModel)]="email" name="email" required
+                   [attr.aria-invalid]="touched() && !validEmail() ? 'true' : null" />
+          </div>
+
+          <div class="form-row two">
+            <div class="form-field">
+              <label for="phone">Phone</label>
+              <input id="phone" type="tel" autocomplete="tel"
+                     [(ngModel)]="phone" name="phone" placeholder="+995 …" />
+            </div>
+            <div class="form-field">
+              <label for="country">Country</label>
+              <input id="country" type="text" autocomplete="country-name"
+                     [(ngModel)]="country" name="country" placeholder="Georgia" />
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label for="requests">Special requests</label>
+            <textarea id="requests" rows="3"
+                      [(ngModel)]="specialRequests" name="requests"
+                      placeholder="Early check-in, dietary needs, accessibility — let us know."></textarea>
+          </div>
+
+          @if (touched() && !canContinueGuestStep()) {
+            <div class="field-error" role="alert">
+              <mat-icon>error_outline</mat-icon>
+              Please complete the required fields with a valid email.
+            </div>
+          }
+
+          <div class="step-actions">
+            <button mat-stroked-button type="button" (click)="goBack()">
+              <mat-icon>arrow_back</mat-icon> Back
+            </button>
+            <button mat-flat-button color="primary" type="submit">
+              Continue to payment
+              <mat-icon>arrow_forward</mat-icon>
+            </button>
+          </div>
+        </form>
+      }
+
+      <!-- STEP 4: PAYMENT (FAKE) -->
+      @if (step() === 'payment') {
+        <header class="step-header">
+          <h2>Payment</h2>
+          <p>Your card won't be charged today — a small deposit will be authorised at check-in.</p>
+        </header>
+
+        <div class="demo-banner" role="note">
+          <mat-icon>verified_user</mat-icon>
+          <div>
+            <strong>Demo mode</strong>
+            <p>This is a portfolio project — no real payment is processed.
+              Enter any details to continue.</p>
+          </div>
+        </div>
+
+        <form class="step-form payment-form" (ngSubmit)="submitBooking()" novalidate>
+          <div class="form-field">
+            <label for="cardName">Cardholder name</label>
+            <input id="cardName" type="text" autocomplete="cc-name"
+                   [(ngModel)]="cardName" name="cardName"
+                   placeholder="As shown on card"
+                   [attr.aria-invalid]="paymentTouched() && !cardName.trim() ? 'true' : null" />
+          </div>
+
+          <div class="form-field">
+            <label for="cardNumber">Card number</label>
+            <div class="input-with-icon">
+              <input id="cardNumber" type="text" inputmode="numeric"
+                     autocomplete="cc-number"
+                     [ngModel]="cardNumber()"
+                     (ngModelChange)="onCardChange($event)"
+                     name="cardNumber"
+                     placeholder="•••• •••• •••• ••••"
+                     maxlength="19"
+                     [attr.aria-invalid]="paymentTouched() && !validCardNumber() ? 'true' : null" />
+              <mat-icon class="card-icon" aria-hidden="true">credit_card</mat-icon>
+            </div>
+          </div>
+
+          <div class="form-row two">
+            <div class="form-field">
+              <label for="cardExpiry">Expiry</label>
+              <input id="cardExpiry" type="text" inputmode="numeric"
+                     autocomplete="cc-exp"
+                     [ngModel]="cardExpiry()"
+                     (ngModelChange)="onExpiryChange($event)"
+                     name="cardExpiry"
+                     placeholder="MM/YY" maxlength="5"
+                     [attr.aria-invalid]="paymentTouched() && !validExpiry() ? 'true' : null" />
+            </div>
+            <div class="form-field">
+              <label for="cardCvc">CVC</label>
+              <input id="cardCvc" type="text" inputmode="numeric"
+                     autocomplete="cc-csc"
+                     [(ngModel)]="cardCvc" name="cardCvc"
+                     placeholder="•••" maxlength="4"
+                     [attr.aria-invalid]="paymentTouched() && !validCvc() ? 'true' : null" />
+            </div>
+          </div>
+
+          <label class="checkbox">
+            <input type="checkbox" [(ngModel)]="termsAccepted" name="terms" />
+            <span>I agree to the <a href="#" (click)="$event.preventDefault()">booking terms</a>
+              and free cancellation up to 24 hours before arrival.</span>
+          </label>
+
+          @if (paymentTouched() && !canSubmitPayment()) {
+            <div class="field-error" role="alert">
+              <mat-icon>error_outline</mat-icon>
+              Please fill in all card details and accept the terms to continue.
+            </div>
+          }
+          @if (submitError()) {
+            <div class="field-error" role="alert">
+              <mat-icon>error_outline</mat-icon>
+              {{ submitError() }}
+            </div>
+          }
+
+          <div class="step-actions">
+            <button mat-stroked-button type="button" (click)="goBack()" [disabled]="submitting()">
+              <mat-icon>arrow_back</mat-icon> Back
+            </button>
+            <button mat-flat-button color="primary" type="submit"
+                    [disabled]="submitting() || !canSubmitPayment()">
+              @if (submitting()) {
+                <span class="spinner" aria-hidden="true"></span>
+                Confirming reservation…
+              } @else {
+                <ng-container>
+                  Confirm booking · ₾{{ total() | number:'1.0-0' }}
+                  <mat-icon>lock</mat-icon>
+                </ng-container>
+              }
+            </button>
+          </div>
+        </form>
+      }
+
+      <!-- STEP 5: CONFIRMATION -->
+      @if (step() === 'confirmation' && confirmation()) {
+        <div class="confirmation">
+          <div class="confirmation-icon" aria-hidden="true">
+            <mat-icon>check_circle</mat-icon>
+          </div>
+          <h2>You're booked!</h2>
+          <p class="confirmation-sub">
+            We've sent a confirmation to <strong>{{ confirmation()!.email }}</strong>.
+            We look forward to welcoming you to The Aurora.
+          </p>
+
+          <div class="confirmation-card">
+            <div class="confirmation-card-header">
+              <span class="confirmation-eyebrow">Confirmation number</span>
+              <span class="confirmation-num">{{ confirmation()!.confirmationNumber }}</span>
+            </div>
+
+            <dl class="confirmation-grid">
+              <div>
+                <dt>Guest</dt>
+                <dd>{{ confirmation()!.guestName }}</dd>
+              </div>
+              <div>
+                <dt>Room</dt>
+                <dd>{{ confirmation()!.roomTypeName }}</dd>
+              </div>
+              <div>
+                <dt>Check in</dt>
+                <dd>{{ confirmation()!.checkIn | date:'EEE, MMM d, y' }}</dd>
+              </div>
+              <div>
+                <dt>Check out</dt>
+                <dd>{{ confirmation()!.checkOut | date:'EEE, MMM d, y' }}</dd>
+              </div>
+              <div>
+                <dt>Nights</dt>
+                <dd>{{ confirmation()!.nights }}</dd>
+              </div>
+              <div>
+                <dt>Total</dt>
+                <dd>₾{{ confirmation()!.totalAmount | number:'1.0-0' }}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="confirmation-actions">
+            <a mat-stroked-button routerLink="/book">Back to hotel</a>
+            <button mat-flat-button color="primary" (click)="startNew()">Make another booking</button>
+          </div>
+
+          <p class="demo-note">
+            <mat-icon>science</mat-icon>
+            Open the admin dashboard in another tab — your booking will appear in real-time.
+          </p>
+        </div>
+      }
+    </section>
+
+    <!-- ── SUMMARY (sticky) ── -->
+    @if (step() !== 'confirmation') {
+      <aside class="booking-summary" aria-label="Booking summary">
+        <div class="summary-card">
+          @if (property(); as p) {
+            <img class="summary-img"
+                 [src]="'https://images.unsplash.com/photo-1564501049412-61c2a3083791?w=600&q=80'"
+                 [alt]="p.name + ' exterior'" />
+            <div class="summary-property">
+              <h3>{{ p.name }}</h3>
+              <span class="summary-loc">{{ p.address }}</span>
+              <span class="summary-stars">
+                @for (_ of [1,2,3,4,5]; track $index) {
+                  <mat-icon>star</mat-icon>
+                }
+              </span>
+            </div>
+          }
+
+          <div class="summary-section">
+            <div class="summary-row">
+              <span>Check in</span>
+              <strong>{{ checkInDate() | date:'MMM d, y' }}</strong>
+            </div>
+            <div class="summary-row">
+              <span>Check out</span>
+              <strong>{{ checkOutDate() | date:'MMM d, y' }}</strong>
+            </div>
+            <div class="summary-row">
+              <span>Nights</span>
+              <strong>{{ nights() }}</strong>
+            </div>
+            <div class="summary-row">
+              <span>Guests</span>
+              <strong>{{ totalGuests() }}</strong>
+            </div>
+          </div>
+
+          @if (selectedRoomType()) {
+            <div class="summary-section">
+              <div class="summary-row">
+                <span>{{ selectedRoomType()!.name }}</span>
+                <strong>₾{{ selectedRoomType()!.basePrice }} × {{ nights() }}</strong>
+              </div>
+              <div class="summary-row">
+                <span>Subtotal</span>
+                <strong>₾{{ subtotal() | number:'1.0-0' }}</strong>
+              </div>
+              <div class="summary-row">
+                <span>Tax (18%)</span>
+                <strong>₾{{ tax() | number:'1.0-0' }}</strong>
+              </div>
+            </div>
+
+            <div class="summary-total">
+              <span>Total</span>
+              <strong>₾{{ total() | number:'1.0-0' }}</strong>
+            </div>
+          } @else {
+            <div class="summary-empty">Select a room to see pricing</div>
+          }
+        </div>
+      </aside>
+    }
+  </div>
+</div>
